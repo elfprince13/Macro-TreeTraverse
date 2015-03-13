@@ -17,6 +17,14 @@ template<size_t DIM, typename T> struct Vec{
 		return out;
 	}
 	
+	inline Vec<DIM, bool> operator <(const Vec<DIM, T> &v) const{
+		Vec<DIM, bool> out;
+		for(size_t i = 0; i < DIM; i++){
+			out.x[i] = this->x[i] < v.x[i];
+		}
+		return out;
+	}
+	
 	inline Vec<DIM, T> operator +(const Vec<DIM, T> &v) const{
 		Vec<DIM, T> out;
 		for(size_t i = 0; i < DIM; i++){
@@ -58,6 +66,7 @@ template<size_t DIM, typename T> struct Vec{
 	}
 };
 
+/*
 // we require DIM*sizeof(TT) < sizeof(OT) or this will be undefined.
 // Doing this properly with templates is a pain.
 // Also require min(mN,mX) == mN && max(mN,mX) == mX
@@ -77,6 +86,7 @@ OT zIndex(Vec<DIM, T> v, Vec<DIM, T> mN, Vec<DIM, T> mX) {
 	return z;
 	
 }
+ */
 
 
 template<size_t DIM, typename T> bool contains(const Vec<DIM, T> &lower, const Vec<DIM, T> &upper, const Vec<DIM, T> point){
@@ -139,7 +149,7 @@ template<size_t DIM, typename T> struct Particle{
 	Vec<DIM, T> vel;
 };
 
-
+/*
 
 template<size_t DIM, typename T> struct ParticleComparator{
 	Vec<DIM, T> minX;
@@ -149,3 +159,4 @@ template<size_t DIM, typename T> struct ParticleComparator{
 	 zIndex<DIM, T, unsigned char, size_t>(p2.pos, minX, maxX);
  }
 };
+*/

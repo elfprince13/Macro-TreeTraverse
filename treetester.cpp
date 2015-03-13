@@ -89,42 +89,62 @@ template<size_t DIM, size_t MAX_LEVELS, typename Float> void delete_tree(Node<DI
 
 // Assume particles are sorted by z-Order;
 template<size_t DIM, size_t MAX_LEVELS, size_t NODE_THRESHOLD, typename Float>
-void add_level(Node<DIM, Float> **levels, size_t level, size_t nMin, Vec<DIM, Float> minExtents, size_t nMax,  Vec<DIM, Float> maxExtents,
-				   const Particle<DIM, Float>  *particles, size_t node_counts[MAX_LEVELS]){
+void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExtents, Vec<DIM, Float> maxExtents,
+				   std::vector< Particle<DIM, Float> > particleV, Particle<DIM, Float>  *particlesDst, size_t node_counts[MAX_LEVELS], size_t &pCount){
 	Node<DIM, Float> nodeHere;
 	nodeHere.minX = minExtents;
 	nodeHere.maxX = maxExtents;
-	size_t pCount = nMax - nMin;
-	std::cout << "Inserting " << pCount << " particles at " << level << std::endl;
-	if((level+1 == MAX_LEVELS) || (pCount < NODE_THRESHOLD)){
+	//std::cout << "Inserting " << particleV.size() << " particles at " << level << std::endl;
+	if((level+1 == MAX_LEVELS) || (particleV.size() < NODE_THRESHOLD)){
 		nodeHere.isLeaf = true;
-		nodeHere.childCount = pCount;
-		nodeHere.childStart = nMin;
+		nodeHere.childCount = particleV.size();
+		nodeHere.childStart = pCount;
+		for(auto it = particleV.begin(); it != particleV.end(); ++it){
+			particlesDst[pCount++] = *it;
+		}
 	} else {
 		nodeHere.isLeaf = false;
 		nodeHere.childStart = std::numeric_limits<size_t>::max();
 		nodeHere.childCount = 0;
-		size_t pI = nMin;
+		
+		std::vector< Particle<DIM, Float> > partBuffer[1 << DIM];
+		Vec<DIM, Float> minXs[1 << DIM];
+		Vec<DIM, Float> maxXs[1 << DIM];
+		Vec<DIM, Float> mid = minExtents + ((maxExtents - minExtents) / 2);
+		
+		
+		
 		for(size_t q = 0; q < (1 << DIM); q++){
-			size_t pNM = pI;
-			Vec<DIM, Float> qMin;
-			Vec<DIM, Float> qMax;
+			partBuffer[q].clear();
 			for(size_t i = 0; i < DIM; i++){
-				Float mid = minExtents.x[i] + ((maxExtents.x[i] - minExtents.x[i]) / 2);
 				if(q & (1 << i)){
-					qMin.x[i] = minExtents.x[i];
-					qMax.x[i] = mid;
+					minXs[q].x[i] = minExtents.x[i];
+					maxXs[q].x[i] = mid.x[i];
 				} else {
-					qMin.x[i] = mid;
-					qMax.x[i] = maxExtents.x[i];
+					minXs[q].x[i] = mid.x[i];
+					maxXs[q].x[i] = maxExtents.x[i];
 				}
 			}
-			for(;(pI < nMax) && contains(qMin, qMax, particles[pI].pos);pI++);
-			if(pI > pNM){
+		}
+		for(auto it = particleV.begin(); it != particleV.end(); ++it){
+			size_t q;
+			for(q = 0; q < (1 << DIM); q++){
+				if(contains(minXs[q], maxXs[q], (*it).pos)){
+					partBuffer[q].push_back(*it);
+					break;
+				}
+			}
+			if (q == (1 << DIM)) {
+				std::cerr << "Couldn't place a particle" << std::endl;
+				exit(1);
+			}
+		}
+		for(size_t q = 0; q < (1 << DIM); q++){
+			if(partBuffer[q].size() != 0){
 				if(node_counts[MAX_LEVELS] < nodeHere.childStart){
 					nodeHere.childStart = node_counts[MAX_LEVELS];
 				}
-				add_level<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(levels, level+1, pNM, qMin, pI, qMax, particles, node_counts);
+				add_level<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(levels, level+1, minXs[q], maxXs[q], partBuffer[q], particlesDst, node_counts, pCount);
 				nodeHere.childCount++;
 			}
 		}
@@ -133,13 +153,19 @@ void add_level(Node<DIM, Float> **levels, size_t level, size_t nMin, Vec<DIM, Fl
 }
 
 template<size_t DIM, size_t MAX_LEVELS, size_t NODE_THRESHOLD, typename Float>
-Node<DIM, Float>** build_tree(size_t n, const Particle<DIM, Float> *particles, size_t node_counts[MAX_LEVELS]) {
+Node<DIM, Float>** build_tree(size_t n, const Particle<DIM, Float> *particles, Particle<DIM, Float> *particlesDst, size_t node_counts[MAX_LEVELS]) {
 	Node<DIM, Float> **levels = new Node<DIM, Float>*[MAX_LEVELS];
 	for(size_t i = 0; i < MAX_LEVELS; i++){
 		levels[i] = new Node<DIM, Float>[1 << (DIM * i)];
 		node_counts[i] = 0;
 	}
-	add_level<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(levels, 0, 0, min_extents<DIM, Float>(n, particles), n, max_extents<DIM, Float>(n, particles), particles, node_counts);
+	size_t pCount = 0;
+	std::vector< Particle<DIM, Float> > particleV(particles, particles + n);
+	add_level<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(levels, 0, min_extents<DIM, Float>(n, particles), max_extents<DIM, Float>(n, particles),  particleV, particlesDst, node_counts, pCount);
+	if(pCount != n){
+		std::cerr << "Count mismatch" << n << " != " << pCount << std::endl;
+		exit(1);
+	}
 	return levels;
 }
 
@@ -157,6 +183,7 @@ Node<DIM, Float>** build_tree(size_t n, const Particle<DIM, Float> *particles, s
 int main(int argc, char* argv[]) {
 	int nPs = atoi(argv[1]);
 	Particle<DIM,Float> *bodies = new Particle<DIM,Float>[nPs] ;
+	Particle<DIM,Float> *bodiesSorted = new Particle<DIM,Float>[nPs] ;
 	Vec<DIM,Float> *forces = new Vec<DIM,Float>[nPs];
 	FILE *f = fopen(argv[2],"rb");
 	for(size_t i = 0; i < nPs; i++){
@@ -181,19 +208,25 @@ int main(int argc, char* argv[]) {
 		std::cout << "%dE:\t" << (e_init - e_now) / e_init << std::endl;
 	}
 	
+	/*
 	std::vector< Particle<DIM, Float> > particleV(bodies, bodies + nPs);
 	ParticleComparator<DIM, Float> comp;
 	comp.minX = min_extents<DIM, Float>(nPs, bodies);
 	comp.maxX = max_extents<DIM, Float>(nPs, bodies);
 	std::sort(particleV.begin(), particleV.end(), comp);
+	 */
 	
 	size_t node_counts[MAX_LEVELS];
-	Node<DIM, Float>** tree = build_tree<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(nPs, particleV.data(), node_counts);
+	size_t validateCt = 0;
+	Node<DIM, Float>** tree = build_tree<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(nPs, bodies, bodiesSorted, node_counts);
 	for(size_t level = 0; level < MAX_LEVELS; level++){
 		for(size_t nodeI = 0; nodeI < node_counts[level]; nodeI++){
-			std::cout << "Node at level " << level << " has leaf " << tree[level][nodeI].isLeaf << " and " << tree[level][nodeI].childCount << " children" << std::endl;
+			//std::cout << "Node at level " << level << " has leaf " << tree[level][nodeI].isLeaf << " and " << tree[level][nodeI].childCount << " children" << std::endl;
+			validateCt += tree[level][nodeI].isLeaf ? tree[level][nodeI].childCount : 0;
 		}
 	}
+	
+	std::cout << "Total in leaves:\t" << validateCt << "\tvs\t" << nPs << "\tto start "<< std::endl;
 	
 	delete_tree<DIM, MAX_LEVELS, Float>(tree);
 	
@@ -201,4 +234,5 @@ int main(int argc, char* argv[]) {
 	
 	
 	delete [] bodies;
+	delete [] bodiesSorted;
 }
