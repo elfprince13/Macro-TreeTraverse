@@ -71,7 +71,7 @@ __global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo,
 			initNodeStack(treeLevels[startDepth], treeCounts[startDepth], currentLevel, cLCt);
 			__syncthreads();
 			
-			Particle<DIM, Float> particle = particles[partIds[threadIdx.x % tgInfo.nParts]];
+			Particle<DIM, Float> particle = particles[tgInfo.childStart + (threadIdx.x % tgInfo.nParts)];
 			Vec<DIM, Float> interaction = freshInteraction<DIM, Float>();
 			int curDepth = startDepth;
 			while(*cLCt != 0){
@@ -80,18 +80,18 @@ __global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo,
 				}
 				__syncthreads();
 			
-				int head = *cLCt;
+				int startOfs = *cLCt;
 				while(startOfs >= 0){
-					int toGrab = startOfs - blockDim.x + threadIdx.x
+					int toGrab = startOfs - blockDim.x + threadIdx.x;
 					if(toGrab >= 0){
-						Node nodeHere = currentLevel[startOfs + threadIdx.x];
+						Node<DIM, Float> nodeHere = currentLevel[startOfs + threadIdx.x];
 						if(passesMAC(tgInfo, nodeHere)){
 							// Store to C/G list
 						} else {
-							if(isLeaf(nodeHere)){
+							if(nodeHere.isLeaf){
 								// Store to P/G list
 							} else {
-								pushAll(particles + nodeHere.childStart, nodeHere.childCount, nextLevel, *nLCt);
+								pushAll(treeLevels[curDepth + 1] + nodeHere.childStart, nodeHere.childCount, nextLevel, *nLCt);
 							}
 						}
 					}
@@ -102,6 +102,7 @@ __global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo,
 					
 					// Interact - SOMETHING IS FISHY HERE
 					// Use a 2 * blockDim.x circular buffer for CGList?
+					/*
 					while(innerStartOfs + blockDim.x <= CGList.size){
 						interaction = interaction + calcCellInteraction(particle, CGList[innerStartOfs + threadIdx.x])
 						
@@ -115,8 +116,9 @@ __global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo,
 						
 						innerStartOfs += blockDim.x
 					}
+					 */
 					
-					startOfs += blockDim.x
+					startOfs += blockDim.x;
 				}
 				
 				swap<Node<DIM, Float>*>(currentLevel, nextLevel);
