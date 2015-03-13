@@ -155,8 +155,8 @@ void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExten
 		}
 		for(size_t q = 0; q < (1 << DIM); q++){
 			if(partBuffer[q].size() != 0){
-				if(node_counts[MAX_LEVELS] < nodeHere.childStart){
-					nodeHere.childStart = node_counts[MAX_LEVELS];
+				if(node_counts[level+1] < nodeHere.childStart){
+					nodeHere.childStart = node_counts[level+1];
 				}
 				add_level<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(levels, level+1, minXs[q], maxXs[q], partBuffer[q], particlesDst, node_counts, pCount);
 				nodeHere.childCount++;
@@ -252,7 +252,7 @@ void initNodeStack(Node<DIM, Float>* level, size_t levelCt, std::vector<Node<DIM
 }
 
 template<size_t DIM, typename Float>
-void pushAll(Node<DIM, Float>* nodes, size_t nodeCt, std::vector<Node<DIM, Float> > stack){
+void pushAll(Node<DIM, Float>* nodes, size_t nodeCt, std::vector<Node<DIM, Float> > &stack){
 	stack.insert(stack.end(), nodes, nodes + nodeCt);
 }
 
@@ -272,11 +272,6 @@ InteractionType<DIM, Float, Mode> freshInteraction(){
 	}
 	return fresh;
 }
-/*
-template<typename T> inline void swap(T& a, T& b){
-	T c(a); a=b; b=c;
-}
-*/
 
 
 
@@ -290,6 +285,8 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 			
 			std::vector<Node<DIM, Float> > currentLevel;
 			std::vector<Node<DIM, Float> > nextLevel;
+			currentLevel.clear();
+			nextLevel.clear();
 			initNodeStack(treeLevels[startDepth], treeCounts[startDepth], currentLevel);
 			
 			Particle<DIM, Float> particle = particles[particleI];
@@ -302,7 +299,8 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 				
 				size_t startOfs = currentLevel.size();
 				while(startOfs > 0){
-					size_t toGrab = --startOfs;
+					size_t toGrab = startOfs - 1;
+					//std::cout << "want to grab " << toGrab << " from " << curDepth << " this is " << startOfs << " - 1  = " << (startOfs - 1) << std::endl;
 					Node<DIM, Float> nodeHere = currentLevel[toGrab];
 					if(passesMAC<DIM, Float, PPG>(tgInfo, nodeHere, theta)){
 						// Just interact :)
@@ -337,10 +335,11 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 								interaction = interaction + update;
 							}
 						} else {
+							//std::cout << "Pushing back " << nodeHere.childCount << " @ " << nodeHere.childStart << std::endl;
 							pushAll(treeLevels[curDepth + 1] + nodeHere.childStart, nodeHere.childCount, nextLevel);
 						}
 					}
-
+					currentLevel.pop_back();
 					startOfs--;
 				}
 				
@@ -388,13 +387,15 @@ int main(int argc, char* argv[]) {
 	
 	std::cout << nPs << "\t" << (1.0  / nPs) << "\t" << bodies[0].m << "\t" << bodies[nPs - 1].m << std::endl;
 	std::cout << "Init energy:\t" << e_init << std::endl;
+	
+	/*
 	for(int i = 0; i < 10; i++){
 		calc_forces_bruteforce<DIM, Float>(nPs, bodies, forces);
 		integrate_system<DIM, Float>(nPs, bodies, forces, DT);
 		Float e_now = sys_energy<DIM, Float>(nPs, bodies);
 		std::cout << "%dE:\t" << (e_init - e_now) / e_init << std::endl;
 	}
-	
+	*/
 
 	
 	// This would be more efficient with proper vectors, but it's fine for now :)
@@ -415,7 +416,7 @@ int main(int argc, char* argv[]) {
 	
 	
 	for(int i = 0; i < 10; i++){
-		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(groups.size(), groups.data(), 2, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
+		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
 		integrate_system<DIM, Float>(nPs, bodiesSorted, forces, DT);
 		Float e_now = sys_energy<DIM, Float>(nPs, bodiesSorted);
 		std::cout << "%dE:\t" << (e_init - e_now) / e_init << std::endl;
