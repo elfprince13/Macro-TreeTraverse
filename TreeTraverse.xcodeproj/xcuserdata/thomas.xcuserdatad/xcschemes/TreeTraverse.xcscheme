@@ -61,11 +61,11 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "1000"
+            argument = "10000"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "plummer1k.dat"
+            argument = "plummer10k.dat"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

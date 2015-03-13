@@ -22,7 +22,7 @@ template<size_t DIM, typename Float> __device__ void initNodeStack(Node<DIM, Flo
 	}
 }
 
-template<size_t DIM, typename Float> __device__ void pushAll(Node<DIM, Float>* nodes, int nodeCt, Node<DIM, Float>* stack, size_t* stackCt){
+template<size_t DIM, typename Float> __device__ void pushAll(Node<DIM, Float>* nodes, int nodeCt, Node<DIM, Float>* stack, int* stackCt){
 	int dst = atomicAdd(stackCt, nodeCt);
 	for(int i = dst, j = 0; i < dst+ nodeCt; i++, j++){
 		stack[i] = nodes[j];
@@ -49,7 +49,7 @@ template<typename T> __device__ inline void swap(T& a, T& b){
 }
 
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS>
-__global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, int startDepth,
+__global__ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t startDepth,
 							 Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions) {
 	extern __shared__ unsigned char smem;
 	
@@ -81,10 +81,10 @@ __global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo,
 				__syncthreads();
 			
 				int startOfs = *cLCt;
-				while(startOfs >= 0){
+				while(startOfs > 0){
 					int toGrab = startOfs - blockDim.x + threadIdx.x;
 					if(toGrab >= 0){
-						Node<DIM, Float> nodeHere = currentLevel[startOfs + threadIdx.x];
+						Node<DIM, Float> nodeHere = currentLevel[toGrab];
 						if(passesMAC(tgInfo, nodeHere)){
 							// Store to C/G list
 						} else {
@@ -118,7 +118,7 @@ __global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo,
 					}
 					 */
 					
-					startOfs += blockDim.x;
+					startOfs -= blockDim.x;
 				}
 				
 				swap<Node<DIM, Float>*>(currentLevel, nextLevel);
