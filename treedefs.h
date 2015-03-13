@@ -128,11 +128,11 @@ template<size_t DIM, typename T> T mag(const Vec<DIM, T> &v){
 	return (T) sqrt(mag_sq(v));
 }
 
-template<size_t DIM, size_t MAX_PARTS> struct GroupInfo{
-	size_t nParts;
-	size_t partIds[MAX_PARTS];
-	Vec<DIM, uint16> minX;
-	Vec<DIM, uint16> maxX;
+template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfo{
+	size_t childCount;
+	size_t childStart;
+	Vec<DIM, T> minX;
+	Vec<DIM, T> maxX;
 };
 
 template<size_t DIM, typename T> struct Node{
@@ -141,6 +141,8 @@ template<size_t DIM, typename T> struct Node{
 	size_t childStart;
 	Vec<DIM, T> minX;
 	Vec<DIM, T> maxX;
+	T mass;
+	Vec<DIM, T> barycenter;
 };
 
 template<size_t DIM, typename T> struct Particle{

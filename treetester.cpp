@@ -99,9 +99,14 @@ void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExten
 		nodeHere.isLeaf = true;
 		nodeHere.childCount = particleV.size();
 		nodeHere.childStart = pCount;
+		Float mass = 0.0;
+		Vec<DIM, Float> bary; for(size_t i = 0; i < DIM; i++){ bary.x[i] = 0.0; };
 		for(auto it = particleV.begin(); it != particleV.end(); ++it){
 			particlesDst[pCount++] = *it;
+			mass += (*it).m;
+			bary = bary + ((*it).pos * (*it).m);
 		}
+		bary = bary / mass;
 	} else {
 		nodeHere.isLeaf = false;
 		nodeHere.childStart = std::numeric_limits<size_t>::max();
@@ -169,6 +174,27 @@ Node<DIM, Float>** build_tree(size_t n, const Particle<DIM, Float> *particles, P
 	return levels;
 }
 
+template<size_t DIM, size_t MAX_LEVELS, size_t N_GROUP, typename Float>
+std::vector<GroupInfo<DIM, Float, N_GROUP> > groups_from_tree(Node<DIM, Float>* tree[MAX_LEVELS], size_t node_counts[MAX_LEVELS], const Particle<DIM, Float> *particles){
+	std::vector<GroupInfo<DIM, Float, N_GROUP> > groups;
+	groups.clear();
+	for(size_t level = 0; level < MAX_LEVELS; level++){
+		for(size_t node = 0; node < node_counts[level]; node++){
+			// We probably don't want to load balance groups because under-full groups can ante-up per-particles
+			for(size_t i = 0; i + N_GROUP < tree[level][node].childCount; i += N_GROUP){
+				GroupInfo<DIM, Float, N_GROUP> group;
+				group.childStart = tree[level][node].childStart + i;
+				group.childCount = (i < tree[level][node].childCount) ? N_GROUP : (tree[level][node].childCount % N_GROUP);
+				group.minX = min_extents(group.childCount, particles + group.childStart);
+				group.maxX = max_extents(group.childCount, particles + group.childStart);
+				
+				groups.push_back(group);
+			}
+		}
+	}
+	return groups;
+}
+
 
 
 
@@ -178,7 +204,7 @@ Node<DIM, Float>** build_tree(size_t n, const Particle<DIM, Float> *particles, P
 
 #define MAX_LEVELS 8
 #define NODE_THRESHOLD 16
-
+#define N_GROUP 16
 
 int main(int argc, char* argv[]) {
 	int nPs = atoi(argv[1]);
@@ -216,6 +242,8 @@ int main(int argc, char* argv[]) {
 	std::sort(particleV.begin(), particleV.end(), comp);
 	 */
 	
+	// This would be more efficient with proper vectors, but it's fine for now :)
+	// At 8 levels deep, it won't be a problem
 	size_t node_counts[MAX_LEVELS];
 	size_t validateCt = 0;
 	Node<DIM, Float>** tree = build_tree<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(nPs, bodies, bodiesSorted, node_counts);
@@ -227,6 +255,8 @@ int main(int argc, char* argv[]) {
 	}
 	
 	std::cout << "Total in leaves:\t" << validateCt << "\tvs\t" << nPs << "\tto start "<< std::endl;
+	
+	std::vector<GroupInfo<DIM, Float, N_GROUP> > groups = groups_from_tree<DIM, MAX_LEVELS, N_GROUP>(tree, node_counts, bodiesSorted);
 	
 	delete_tree<DIM, MAX_LEVELS, Float>(tree);
 	
