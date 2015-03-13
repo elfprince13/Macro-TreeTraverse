@@ -1,4 +1,9 @@
-#include <treedefs.h>
+#include "treedefs.h"
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <device_functions.h>
+
+//: We should really be using native CUDA vectors for this.... but that requires more funny typing magic to convert the CPU data
 
 template<size_t DIM, typename Float, size_t PPG> __device__ bool passesMAC(GroupInfo<DIM, Float, PPG> groupInfo, Node<DIM, Float> nodeHere, Float theta) {
 	
@@ -8,61 +13,118 @@ template<size_t DIM, typename Float, size_t PPG> __device__ bool passesMAC(Group
 	
 }
 
+template<size_t DIM, typename Float> __device__ void initNodeStack(Node<DIM, Float>* level, size_t levelCt, Node<DIM, Float>* stack, size_t* stackCt){
+	if(threadIdx.x < levelCt){
+		stack[threadIdx.x] = level[threadIdx.x];
+		if(threadIdx.x == 0){
+			*stackCt += levelCt;
+		}
+	}
+}
 
-template<size_t DIM, typename Float, size_t PPG> __global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, int startDepth, Node<DIM>*[MaxLevels] treeLevels, Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions) {
-	if(blockIdx.x >= nGroups) return;
+template<size_t DIM, typename Float> __device__ void pushAll(Node<DIM, Float>* nodes, int nodeCt, Node<DIM, Float>* stack, size_t* stackCt){
+	int dst = atomicAdd(stackCt, nodeCt);
+	for(int i = dst, j = 0; i < dst+ nodeCt; i++, j++){
+		stack[i] = nodes[j];
+	}
+}
+
+// Needs softening
+template<size_t DIM, typename Float> __device__ Vec<DIM, Float> calc_force(Float m1, Vec<DIM, Float> v1, Float m2, Vec<DIM, Float> v2, Float softening){
+	Vec<DIM, Float> disp = v1 - v2;
+	Vec<DIM, Float> force;
+	force = disp * ((*m1 * m2) / (Float)(softening + pow(mag_sq(disp),1.5)));
+	return force;
+}
+
+template<size_t DIM, typename Float> __device__ Vec<DIM, Float> freshInteraction(){
+	Vec<DIM, Float> fresh; for(size_t i = 0; i < DIM; i++){
+		fresh[i] = 0.0;
+	}
+	return fresh;
+}
+
+template<typename T> __device__ inline void swap(T& a, T& b){
+	T c(a); a=b; b=c;
+}
+
+template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS>
+__global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, int startDepth,
+							 Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions) {
+	extern __shared__ unsigned char smem;
+	
+	if(blockIdx.x >= nGroups) return; // This probably shouldn't happen?
 	else {
-		GroupInfo tgInfo = groupInfo[blockIdx.x];
+		GroupInfo<DIM, Float, PPG> tgInfo = groupInfo[blockIdx.x];
 		int threadsPerPart = blockDim.x / tgInfo.nParts;
 		if(threadIdx.x > threadsPerPart * tgInfo.nParts) return;
 		else {
-			NodeStack currentLevel = initNodeStack(treeLevels[curDepth]); // Shared?
-			NodeStack nextLevel = emptyNodeStack(); // Shared?
+			// This is a horrible abuse of shared memory. We need to SOA the stacks
+			// Also this is too big
+			size_t* cLCt = (size_t*)smem;
+			Node<DIM, Float>* currentLevel = (Node<DIM, Float>*)(smem + sizeof(size_t));
+			size_t* nLCt = (size_t*)(smem + sizeof(size_t) + 2 * blockDim.x * sizeof(Node<DIM, Float>));
+			Node<DIM, Float>* nextLevel = (Node<DIM, Float>*)(smem + 2*sizeof(size_t) +  2 * blockDim.x * sizeof(Node<DIM, Float>));
+			if(threadIdx.x == 0){
+				*cLCt = 0;
+			}
+			initNodeStack(treeLevels[startDepth], treeCounts[startDepth], currentLevel, cLCt);
+			__syncthreads();
 			
-			Particle particle = particles[partIds[threadIdx.x % tgInfo.nParts]];
-			Interaction interaction = freshInteraction(dims);
+			Particle<DIM, Float> particle = particles[partIds[threadIdx.x % tgInfo.nParts]];
+			Vec<DIM, Float> interaction = freshInteraction<DIM, Float>();
 			int curDepth = startDepth;
-			while(currentLevel.size){
-				nextLevel.clear(); // Only once please
+			while(*cLCt != 0){
+				if(threadIdx.x == 0){
+					*nLCt = 0;
+				}
 				__syncthreads();
 			
-				int startOfs = 0;
-				while(startOfs < currentLevel.size){
-					Node nodeHere = currentLevel[startOfs + threadIdx.x];
-					if(passesMAC(tgInfo, nodeHere)){
-						// Store to C/G list
-					} else {
-						if(isLeaf(nodeHere)){
-							// Store to P/G list
+				int head = *cLCt;
+				while(startOfs >= 0){
+					int toGrab = startOfs - blockDim.x + threadIdx.x
+					if(toGrab >= 0){
+						Node nodeHere = currentLevel[startOfs + threadIdx.x];
+						if(passesMAC(tgInfo, nodeHere)){
+							// Store to C/G list
 						} else {
-							push(nodeHere.children);
+							if(isLeaf(nodeHere)){
+								// Store to P/G list
+							} else {
+								pushAll(particles + nodeHere.childStart, nodeHere.childCount, nextLevel, *nLCt);
+							}
 						}
 					}
 					__syncthreads();
 					
 					int innerStartOfs = 0;
+					// Consider transposing either of these loops.
+					
 					// Interact - SOMETHING IS FISHY HERE
-					// Use a 2 * blockDims.x circular buffer for CGList?
-					while(innerStartOfs + blocksDims.x <= CGList.size){
-						interaction += calcCellInteraction(particle, CGList[this half])
+					// Use a 2 * blockDim.x circular buffer for CGList?
+					while(innerStartOfs + blockDim.x <= CGList.size){
+						interaction = interaction + calcCellInteraction(particle, CGList[innerStartOfs + threadIdx.x])
 						
-						innerStartOfs += blockDims.x
+						innerStartOfs += blockDim.x
 					}
 					
 					innerStartOfs = 0;
 					// Interact
-					while(innerStartOfs + blocksDims.x <= PGList.size){
-						interaction += calcPartInteraction(particle, PGList[innerStartOfs + threadIdx.x])
+					while(innerStartOfs + blockDim.x <= PGList.size){
+						interaction = interaction + calc_force(particle.m, particle.pos, PGList[innerStartOfs + threadIdx.x])
 						
-						innerStartOfs += blockDims.x
+						innerStartOfs += blockDim.x
 					}
 					
-					startOfs += blockDims.x
+					startOfs += blockDim.x
 				}
 				
-				swap(currentLevel, nextLevel);
+				swap<Node<DIM, Float>*>(currentLevel, nextLevel);
+				swap<size_t*>(cLCt, nLCt);
 				curDepth += 1;
-			}			
+			}
+			
+			// Process remaining interactions and reduce if multithreading in play
 		}
 	}
 	
