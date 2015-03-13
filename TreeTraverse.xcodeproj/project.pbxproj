@@ -33,6 +33,7 @@
 		E9397DB21AB2A1D7002AD86B /* plummer10k.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer10k.dat; path = data/plummer10k.dat; sourceTree = "<group>"; };
 		E9397DB31AB2A1D7002AD86B /* plummer100.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer100.dat; path = data/plummer100.dat; sourceTree = "<group>"; };
 		E9397DB41AB2A1D7002AD86B /* plummer100k.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer100k.dat; path = data/plummer100k.dat; sourceTree = "<group>"; };
+		E98A885D1AB2D3F400E64D76 /* Miniball.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Miniball.hpp; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,6 +70,7 @@
 				E9397DAA1AB2A0DB002AD86B /* makeplummer.py */,
 				E9397DAB1AB2A0DB002AD86B /* treecode.cu */,
 				E9397DAC1AB2A0DB002AD86B /* treedefs.h */,
+				E98A885D1AB2D3F400E64D76 /* Miniball.hpp */,
 				E9397DAD1AB2A0DB002AD86B /* treetester.cpp */,
 			);
 			path = TreeTraverse;
@@ -256,6 +258,7 @@
 				E9397DA91AB2A06C002AD86B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

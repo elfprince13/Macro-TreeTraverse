@@ -133,6 +133,8 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfo{
 	size_t childStart;
 	Vec<DIM, T> minX;
 	Vec<DIM, T> maxX;
+	Vec<DIM, T> center;
+	T radius;
 };
 
 template<size_t DIM, typename T> struct Node{
@@ -143,6 +145,7 @@ template<size_t DIM, typename T> struct Node{
 	Vec<DIM, T> maxX;
 	T mass;
 	Vec<DIM, T> barycenter;
+	T radius;
 };
 
 template<size_t DIM, typename T> struct Particle{

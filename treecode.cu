@@ -1,7 +1,15 @@
 #include <treedefs.h>
 
+template<size_t DIM, typename Float, size_t PPG> __device__ bool passesMAC(GroupInfo<DIM, Float, PPG> groupInfo, Node<DIM, Float> nodeHere, Float theta) {
+	
+	Float d = mag(groupInfo.center, nodeHere.barycenter) - groupInfo.radius;
+	Float l = 2 * nodeHere.radius;
+	return d > (l / theta);
+	
+}
 
-template<size_t DIM, typename Float, size_t PPG> __global__ void traverseTree(int nGroups, GroupInfo<DIM, PPG>* groupInfo, int startDepth, Node<DIM>*[MaxLevels] treeLevels, Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions) {
+
+template<size_t DIM, typename Float, size_t PPG> __global__ void traverseTree(int nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, int startDepth, Node<DIM>*[MaxLevels] treeLevels, Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions) {
 	if(blockIdx.x >= nGroups) return;
 	else {
 		GroupInfo tgInfo = groupInfo[blockIdx.x];

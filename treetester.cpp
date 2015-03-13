@@ -3,6 +3,7 @@
 #include <limits>
 #include <vector>
 #include <algorithm>
+#include "Miniball.hpp"
 
 template<typename T> T factorial(T n)
 {
@@ -99,6 +100,7 @@ void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExten
 		nodeHere.isLeaf = true;
 		nodeHere.childCount = particleV.size();
 		nodeHere.childStart = pCount;
+		nodeHere.radius = 0.0;
 		Float mass = 0.0;
 		Vec<DIM, Float> bary; for(size_t i = 0; i < DIM; i++){ bary.x[i] = 0.0; };
 		for(auto it = particleV.begin(); it != particleV.end(); ++it){
@@ -107,6 +109,12 @@ void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExten
 			bary = bary + ((*it).pos * (*it).m);
 		}
 		bary = bary / mass;
+		nodeHere.mass = mass;
+		nodeHere.barycenter = bary;
+		for(auto it = particleV.begin(); it != particleV.end(); ++it){
+			Float radHere = mag((*it).pos - bary);
+			nodeHere.radius = radHere > nodeHere.radius ? radHere : nodeHere.radius;
+		}
 	} else {
 		nodeHere.isLeaf = false;
 		nodeHere.childStart = std::numeric_limits<size_t>::max();
@@ -188,6 +196,19 @@ std::vector<GroupInfo<DIM, Float, N_GROUP> > groups_from_tree(Node<DIM, Float>* 
 				group.minX = min_extents(group.childCount, particles + group.childStart);
 				group.maxX = max_extents(group.childCount, particles + group.childStart);
 				
+				// Here, and where we do the same for nodes, we should consider using Miniball instead
+				// But this is a faster heuristic and will be fine for plummer spheres (and hopefully in general)
+				
+				typedef const Particle<DIM, Float>* PointAccessor;
+				typedef const Float* CoordAccessor;
+				typedef Miniball::Miniball<Miniball::CoordAccessor<PointAccessor, CoordAccessor>> MB;
+				MB mb (DIM, particles + group.childStart, particles + group.childStart + group.childCount);
+				const Float *center = mb.center();
+				for(size_t j = 0; j < DIM; j++){
+					group.center.x[j] = center[j];
+				}
+				group.radius = sqrt(mb.squared_radius());
+
 				groups.push_back(group);
 			}
 		}

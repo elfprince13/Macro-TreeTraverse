@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>ADA99C74-A8AD-48CD-AF70-063AA7A4FDF2</string>
+	<key>IDESourceControlProjectName</key>
+	<string>TreeTraverse</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>EA8D7528F85CB54CB3AB6F3BD6C1EBA1D847403A</key>
+		<string>https://github.com/elfprince13/Macro-TreeTraverse.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>TreeTraverse.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>EA8D7528F85CB54CB3AB6F3BD6C1EBA1D847403A</key>
+		<string>../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>https://github.com/elfprince13/Macro-TreeTraverse.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>EA8D7528F85CB54CB3AB6F3BD6C1EBA1D847403A</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>EA8D7528F85CB54CB3AB6F3BD6C1EBA1D847403A</string>
+			<key>IDESourceControlWCCName</key>
+			<string>TreeTraverse</string>
+		</dict>
+	</array>
+</dict>
+</plist>
