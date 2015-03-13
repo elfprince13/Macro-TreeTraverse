@@ -25,7 +25,7 @@
 /* Begin PBXFileReference section */
 		E9397DA01AB2A06C002AD86B /* TreeTraverse */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TreeTraverse; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9397DAA1AB2A0DB002AD86B /* makeplummer.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = makeplummer.py; sourceTree = SOURCE_ROOT; };
-		E9397DAB1AB2A0DB002AD86B /* treecode.cu */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = treecode.cu; sourceTree = SOURCE_ROOT; };
+		E9397DAB1AB2A0DB002AD86B /* treecode.cu */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = treecode.cu; sourceTree = SOURCE_ROOT; };
 		E9397DAC1AB2A0DB002AD86B /* treedefs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = treedefs.h; sourceTree = SOURCE_ROOT; };
 		E9397DAD1AB2A0DB002AD86B /* treetester.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = treetester.cpp; sourceTree = SOURCE_ROOT; };
 		E9397DB01AB2A1D7002AD86B /* plummer1k.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer1k.dat; path = data/plummer1k.dat; sourceTree = "<group>"; };

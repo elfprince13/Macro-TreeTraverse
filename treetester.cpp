@@ -1,5 +1,8 @@
 #include "treedefs.h"
 #include <iostream>
+#include <limits>
+#include <vector>
+#include <algorithm>
 
 template<typename T> T factorial(T n)
 {
@@ -13,7 +16,7 @@ template<typename Float> Float readFloat(FILE *f) {
 }
 
 
-template<size_t DIM, typename Float> Float sys_energy(size_t n, Particle<DIM, Float> *particles){
+template<size_t DIM, typename Float> Float sys_energy(size_t n, Particle<DIM, Float> const *particles){
 	Float energy = 0.0;
 	for(size_t i = 0; i < n; i++){
 		energy += 0.5 * particles[i].m * mag_sq(particles[i].vel);
@@ -32,7 +35,7 @@ template<size_t ORDER, typename Float> Float forward_euler(Vec<ORDER+1, Float> y
 	return yn;
 }
 
-template<size_t DIM, typename Float> void integrate_system(size_t n, Particle<DIM, Float> *particles, Vec<DIM, Float> *forces, Float dt){
+template<size_t DIM, typename Float> void integrate_system(size_t n, Particle<DIM, Float> *particles, Vec<DIM, Float> const *forces, Float dt){
 	for(size_t i = 0; i < n; i++){
 		for(size_t j = 0; j < DIM; j++){
 			Vec<3, Float> posp = {.x = {particles[i].pos.x[j], particles[i].vel.x[j], forces[i].x[j] / particles[i].m}};
@@ -44,7 +47,7 @@ template<size_t DIM, typename Float> void integrate_system(size_t n, Particle<DI
 	
 }
 
-template<size_t DIM, typename Float> void calc_forces_bruteforce(size_t n, Particle<DIM, Float> *particles, Vec<DIM, Float> *forces){
+template<size_t DIM, typename Float> void calc_forces_bruteforce(size_t n, Particle<DIM, Float> const *particles, Vec<DIM, Float> *forces){
 	for(size_t i = 0; i < n; i++){
 		forces[i] = (Vec<DIM,Float>){.x = {0, 0, 0}};
 		for(size_t j = 0; j< n; j++){
@@ -55,12 +58,100 @@ template<size_t DIM, typename Float> void calc_forces_bruteforce(size_t n, Parti
 	}
 }
 
+template<size_t DIM, typename Float> Vec<DIM, Float> min_extents(size_t n, Particle<DIM, Float> const *particles){
+	Vec<DIM, Float> minE;
+	for(size_t i = 0; i < DIM; i++){
+		minE.x[i] = std::numeric_limits<Float>::infinity();
+	}
+	for(size_t i = 0; i < n; i++){
+		minE = min(minE, particles[i].pos);
+	}
+	return minE;
+}
+
+template<size_t DIM, typename Float> Vec<DIM, Float> max_extents(size_t n, Particle<DIM, Float> const *particles){
+	Vec<DIM, Float> maxE;
+	for(size_t i = 0; i < DIM; i++){
+		maxE.x[i] = -std::numeric_limits<Float>::infinity();
+	}
+	for(size_t i = 0; i < n; i++){
+		maxE = max(maxE, particles[i].pos);
+	}
+	return maxE;
+}
+
+template<size_t DIM, size_t MAX_LEVELS, typename Float> void delete_tree(Node<DIM, Float>**tree){
+	for(size_t i = 0; i < MAX_LEVELS; i++){
+		delete [] tree[i];
+	}
+	delete [] tree;
+}
+
+// Assume particles are sorted by z-Order;
+template<size_t DIM, size_t MAX_LEVELS, size_t NODE_THRESHOLD, typename Float>
+void add_level(Node<DIM, Float> **levels, size_t level, size_t nMin, Vec<DIM, Float> minExtents, size_t nMax,  Vec<DIM, Float> maxExtents,
+				   const Particle<DIM, Float>  *particles, size_t node_counts[MAX_LEVELS]){
+	Node<DIM, Float> nodeHere;
+	nodeHere.minX = minExtents;
+	nodeHere.maxX = maxExtents;
+	size_t pCount = nMax - nMin;
+	std::cout << "Inserting " << pCount << " particles at " << level << std::endl;
+	if((level+1 == MAX_LEVELS) || (pCount < NODE_THRESHOLD)){
+		nodeHere.isLeaf = true;
+		nodeHere.childCount = pCount;
+		nodeHere.childStart = nMin;
+	} else {
+		nodeHere.isLeaf = false;
+		nodeHere.childStart = std::numeric_limits<size_t>::max();
+		nodeHere.childCount = 0;
+		size_t pI = nMin;
+		for(size_t q = 0; q < (1 << DIM); q++){
+			size_t pNM = pI;
+			Vec<DIM, Float> qMin;
+			Vec<DIM, Float> qMax;
+			for(size_t i = 0; i < DIM; i++){
+				Float mid = minExtents.x[i] + ((maxExtents.x[i] - minExtents.x[i]) / 2);
+				if(q & (1 << i)){
+					qMin.x[i] = minExtents.x[i];
+					qMax.x[i] = mid;
+				} else {
+					qMin.x[i] = mid;
+					qMax.x[i] = maxExtents.x[i];
+				}
+			}
+			for(;(pI < nMax) && contains(qMin, qMax, particles[pI].pos);pI++);
+			if(pI > pNM){
+				if(node_counts[MAX_LEVELS] < nodeHere.childStart){
+					nodeHere.childStart = node_counts[MAX_LEVELS];
+				}
+				add_level<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(levels, level+1, pNM, qMin, pI, qMax, particles, node_counts);
+				nodeHere.childCount++;
+			}
+		}
+	}
+	levels[level][node_counts[level]++] = nodeHere;
+}
+
+template<size_t DIM, size_t MAX_LEVELS, size_t NODE_THRESHOLD, typename Float>
+Node<DIM, Float>** build_tree(size_t n, const Particle<DIM, Float> *particles, size_t node_counts[MAX_LEVELS]) {
+	Node<DIM, Float> **levels = new Node<DIM, Float>*[MAX_LEVELS];
+	for(size_t i = 0; i < MAX_LEVELS; i++){
+		levels[i] = new Node<DIM, Float>[1 << (DIM * i)];
+		node_counts[i] = 0;
+	}
+	add_level<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(levels, 0, 0, min_extents<DIM, Float>(n, particles), n, max_extents<DIM, Float>(n, particles), particles, node_counts);
+	return levels;
+}
+
 
 
 
 #define DIM 3
 #define Float float
 #define DT 0.001
+
+#define MAX_LEVELS 8
+#define NODE_THRESHOLD 16
 
 
 int main(int argc, char* argv[]) {
@@ -83,12 +174,29 @@ int main(int argc, char* argv[]) {
 	
 	std::cout << nPs << "\t" << (1.0  / nPs) << "\t" << bodies[0].m << "\t" << bodies[nPs - 1].m << std::endl;
 	std::cout << "Init energy:\t" << e_init << std::endl;
-	for(int i = 0; i < 1000; i++){
+	for(int i = 0; i < 10; i++){
 		calc_forces_bruteforce<DIM, Float>(nPs, bodies, forces);
 		integrate_system<DIM, Float>(nPs, bodies, forces, DT);
 		Float e_now = sys_energy<DIM, Float>(nPs, bodies);
 		std::cout << "%dE:\t" << (e_init - e_now) / e_init << std::endl;
 	}
+	
+	std::vector< Particle<DIM, Float> > particleV(bodies, bodies + nPs);
+	ParticleComparator<DIM, Float> comp;
+	comp.minX = min_extents<DIM, Float>(nPs, bodies);
+	comp.maxX = max_extents<DIM, Float>(nPs, bodies);
+	std::sort(particleV.begin(), particleV.end(), comp);
+	
+	size_t node_counts[MAX_LEVELS];
+	Node<DIM, Float>** tree = build_tree<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(nPs, particleV.data(), node_counts);
+	for(size_t level = 0; level < MAX_LEVELS; level++){
+		for(size_t nodeI = 0; nodeI < node_counts[level]; nodeI++){
+			std::cout << "Node at level " << level << " has leaf " << tree[level][nodeI].isLeaf << " and " << tree[level][nodeI].childCount << " children" << std::endl;
+		}
+	}
+	
+	delete_tree<DIM, MAX_LEVELS, Float>(tree);
+	
 	
 	
 	

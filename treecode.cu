@@ -1,3 +1,4 @@
+#include <treedefs.h>
 
 
 template<size_t DIM, typename Float, size_t PPG> __global__ void traverseTree(int nGroups, GroupInfo<DIM, PPG>* groupInfo, int startDepth, Node<DIM>*[MaxLevels] treeLevels, Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions) {

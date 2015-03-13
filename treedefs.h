@@ -8,7 +8,7 @@ typedef unsigned short uint16;
 
 template<size_t DIM, typename T> struct Vec{
 	T x[DIM];
-	
+
 	inline Vec<DIM, T> operator -(const Vec<DIM, T> &v) const{
 		Vec<DIM, T> out;
 		for(size_t i = 0; i < DIM; i++){
@@ -32,7 +32,77 @@ template<size_t DIM, typename T> struct Vec{
 		}
 		return out;
 	}
+	
+	inline Vec<DIM, T> operator /(T s) const{
+		Vec<DIM, T> out;
+		for(size_t i = 0; i < DIM; i++){
+			out.x[i] = this->x[i] / s;
+		}
+		return out;
+	}
+	
+	inline Vec<DIM, T> operator *(const Vec<DIM, T> &v) const{
+		Vec<DIM, T> out;
+		for(size_t i = 0; i < DIM; i++){
+			out.x[i] = this->x[i] * v.x[i];
+		}
+		return out;
+	}
+	
+	inline Vec<DIM, T> operator /(const Vec<DIM, T> &v) const{
+		Vec<DIM, T> out;
+		for(size_t i = 0; i < DIM; i++){
+			out.x[i] = this->x[i] / v.x[i];
+		}
+		return out;
+	}
 };
+
+// we require DIM*sizeof(TT) < sizeof(OT) or this will be undefined.
+// Doing this properly with templates is a pain.
+// Also require min(mN,mX) == mN && max(mN,mX) == mX
+template<size_t DIM, typename T, typename TT, typename OT>
+OT zIndex(Vec<DIM, T> v, Vec<DIM, T> mN, Vec<DIM, T> mX) {
+	OT z = 0;
+	Vec<DIM, T> ones; for(size_t i = 0; i < DIM; i++){ ones.x[i] = 1; }
+	Vec<DIM, T> mXSafe = max(ones, mX - mN);
+	Vec<DIM, T> nv = ((v - mN) / mXSafe) * (1 << sizeof(TT));
+	Vec<DIM, TT> bv; for(size_t i = 0; i < DIM; i++){ bv.x[i] = (TT) nv.x[i]; }
+	for(size_t b = 0; b < sizeof(TT); b++){
+		for(size_t i = 0; i < DIM; i++){
+			OT flag = ((bv.x[i] & (1 << b)) >> b);
+			z |= flag << (DIM * b + i);
+		}
+	}
+	return z;
+	
+}
+
+
+template<size_t DIM, typename T> bool contains(const Vec<DIM, T> &lower, const Vec<DIM, T> &upper, const Vec<DIM, T> point){
+	bool is_contained = true;
+	for(size_t i = 0; is_contained && i < DIM; i++){
+		is_contained &= (lower.x[i] <= point.x[i]) && (upper.x[i] >= point.x[i]);
+	}
+	return is_contained;
+}
+
+template<size_t DIM, typename T> Vec<DIM, T> min(const Vec<DIM, T> &v1, const Vec<DIM, T> &v2){
+	Vec<DIM, T> ret;
+	for(size_t i = 0; i < DIM; i++){
+		ret.x[i] = (v1.x[i] < v2.x[i]) ? v1.x[i] : v2.x[i];
+	}
+	return ret;
+}
+
+
+template<size_t DIM, typename T> Vec<DIM, T> max(const Vec<DIM, T> &v1, const Vec<DIM, T> &v2){
+	Vec<DIM, T> ret;
+	for(size_t i = 0; i < DIM; i++){
+		ret.x[i] = (v1.x[i] > v2.x[i]) ? v1.x[i] : v2.x[i];
+	}
+	return ret;
+}
 
 
 template<size_t DIM, typename T> T mag_sq(const Vec<DIM, T> &v){
@@ -55,16 +125,27 @@ template<size_t DIM, size_t MAX_PARTS> struct GroupInfo{
 	Vec<DIM, uint16> maxX;
 };
 
-template<size_t DIM> struct Node{
+template<size_t DIM, typename T> struct Node{
 	bool isLeaf;
 	size_t childCount;
 	size_t childStart;
-	Vec<DIM, uint16> minX;
-	Vec<DIM, uint16> maxX;
+	Vec<DIM, T> minX;
+	Vec<DIM, T> maxX;
 };
 
 template<size_t DIM, typename T> struct Particle{
 	T m;
 	Vec<DIM, T> pos;
 	Vec<DIM, T> vel;
+};
+
+
+
+template<size_t DIM, typename T> struct ParticleComparator{
+	Vec<DIM, T> minX;
+	Vec<DIM, T> maxX;
+ bool operator()(Particle<DIM, T> p1, Particle<DIM, T> p2){
+	 return zIndex<DIM, T, unsigned char, size_t>(p1.pos, minX, maxX) <
+	 zIndex<DIM, T, unsigned char, size_t>(p2.pos, minX, maxX);
+ }
 };
