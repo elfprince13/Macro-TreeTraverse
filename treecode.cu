@@ -1,11 +1,12 @@
 #include "treedefs.h"
+#include "CudaArrayCopyUtils.h"
 #include "treecodeCU.h"
 #include "cudahelper.h"
 #include <iostream>
 
 //: We should really be using native CUDA vectors for this.... but that requires more funny typing magic to convert the CPU data
 
-template<size_t DIM, typename Float, size_t PPG> __device__ bool passesMAC(GroupInfo<DIM, Float, PPG> groupInfo, Node<DIM, Float> nodeHere, Float theta) {
+template<size_t DIM, typename Float, size_t PPG> __device__ bool passesMAC(const GroupInfo<DIM, Float, PPG>& groupInfo, const Node<DIM, Float>& nodeHere, Float theta) {
 	
 	Float d = mag(groupInfo.center - nodeHere.barycenter) - groupInfo.radius;
 	Float l = 2 * nodeHere.radius;
@@ -13,7 +14,7 @@ template<size_t DIM, typename Float, size_t PPG> __device__ bool passesMAC(Group
 	
 }
 
-template<template<size_t, typename> class StackElms, size_t DIM, typename Float> __device__ void initStack(StackElms<DIM, Float>* level, size_t levelCt, StackElms<DIM, Float>* stack, size_t* stackCt, const size_t capacity){
+template<template<size_t, typename> class StackElmsArray, size_t DIM, typename Float> __device__ void initStack(StackElmsArray<DIM, Float> level, size_t levelCt, StackElmsArray<DIM, Float> stack, size_t* stackCt, const size_t capacity){
 	//*
 	if(threadIdx.x < levelCt){
 		stack[threadIdx.x] = level[threadIdx.x];
@@ -27,7 +28,7 @@ template<template<size_t, typename> class StackElms, size_t DIM, typename Float>
 	//*/
 }
 
-template<template<size_t, typename> class StackElms, size_t DIM, typename Float> __device__ void pushAll(const StackElms<DIM, Float>* nodes, const size_t nodeCt, StackElms<DIM, Float>* stack, size_t* stackCt){
+template<template<size_t, typename> class StackElmsArray, size_t DIM, typename Float> __device__ void pushAll(const StackElmsArray<DIM, Float> nodes, const size_t nodeCt, StackElmsArray<DIM, Float> stack, size_t* stackCt){
 	// This is a weird compiler bug. There's no reason this shouldn't have worked without the cast.
 	size_t dst = atomicAdd((unsigned long long*)stackCt, (unsigned long long)nodeCt);
 	for(size_t i = dst, j = 0; i < dst+ nodeCt; i++, j++){
@@ -56,15 +57,52 @@ template<typename T> __device__ inline void swap(T& a, T& b){
 }
 
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
-__global__ void traverseTreeKernel(const size_t nGroups, const GroupInfo<DIM, Float, PPG>* groupInfo,
-								   const size_t startDepth, Node<DIM, Float>** treeLevels, const size_t* treeCounts,
-								   const Particle<DIM, Float>* particles, const InteractionType<DIM, Float, Mode>* interactions,
+__global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DIM, Float, PPG> groupInfo,
+								   const size_t startDepth, NodeArray<DIM, Float>* treeLevels, const size_t* treeCounts,
+								   const ParticleArray<DIM, Float> particles, const InteractionTypeArray<DIM, Float, Mode> interactions,
 								   const Float softening, const Float theta,
-								   size_t *bfsStackCounters, Node<DIM, Float> *bfsStackBuffers, const size_t stackCapacity) {
+								   size_t *bfsStackCounters, NodeArray<DIM, Float> bfsStackBuffers, const size_t stackCapacity) {
 	
 	__shared__ size_t interactionCounters[2];
-	__shared__ Particle<DIM, Float> particleInteractionList[2*INTERACTION_THRESHOLD];
-	__shared__ Node<DIM, Float> nodeInteractionList[2*INTERACTION_THRESHOLD];
+	__shared__ Float particleMass[2*INTERACTION_THRESHOLD];
+	__shared__ Float particlePos[DIM * 2*INTERACTION_THRESHOLD];
+	__shared__ Float particleVel[DIM * 2*INTERACTION_THRESHOLD];
+	
+	__shared__ bool nodeLeaves[2 * INTERACTION_THRESHOLD];
+	__shared__ size_t nodeChildCount[2*INTERACTION_THRESHOLD];
+	__shared__ size_t nodeChildStart[2*INTERACTION_THRESHOLD];
+	__shared__ Float nodeMinX[3*2*INTERACTION_THRESHOLD];
+	__shared__ Float nodeMaxX[3*2*INTERACTION_THRESHOLD];
+	__shared__ Float nodeBarycenter[3*2*INTERACTION_THRESHOLD];
+	__shared__ Float nodeMass[2*INTERACTION_THRESHOLD];
+	__shared__ Float nodeRadius[2*INTERACTION_THRESHOLD];
+	
+	
+	ParticleArray<DIM, Float> particleInteractionList;
+	particleInteractionList.m = particleMass;
+	for(size_t j = 0; j < DIM; j++){
+		particleInteractionList.pos.x[j] = particlePos + (j * 2 * INTERACTION_THRESHOLD);
+	}
+	for(size_t j = 0; j < DIM; j++){
+		particleInteractionList.vel.x[j] = particleVel + (j * 2 * INTERACTION_THRESHOLD);
+	}
+	
+	
+	NodeArray<DIM, Float> nodeInteractionList;
+	nodeInteractionList.isLeaf = nodeLeaves;
+	nodeInteractionList.childCount = nodeChildCount;
+	nodeInteractionList.childStart = nodeChildStart;
+	for(size_t j = 0; j < DIM; j++){
+		nodeInteractionList.minX.x[j] = nodeMinX + (j * 2 * INTERACTION_THRESHOLD);
+	}
+	for(size_t j = 0; j < DIM; j++){
+		nodeInteractionList.maxX.x[j] = nodeMaxX + (j * 2 * INTERACTION_THRESHOLD);
+	}
+	for(size_t j = 0; j < DIM; j++){
+		nodeInteractionList.barycenter.x[j] = nodeBarycenter + (j * 2 * INTERACTION_THRESHOLD);
+	}
+	nodeInteractionList.mass = nodeMass;
+	nodeInteractionList.radius = nodeRadius;
 	
 	if(blockIdx.x >= nGroups) return; // This probably shouldn't happen?
 	else {
@@ -73,21 +111,23 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfo<DIM, Fl
 		
 		
 		size_t* pGLCt = interactionCounters;
-		Particle<DIM, Float>* pGList = particleInteractionList;
-		initStack((Particle<DIM, Float>*)nullptr, 0, pGList, pGLCt, 2 * INTERACTION_THRESHOLD);
+		ParticleArray<DIM, Float> pGList = particleInteractionList;
+		ParticleArray<DIM, Float> dummyP;
+		initStack(dummyP, 0, pGList, pGLCt, 2 * INTERACTION_THRESHOLD);
 		
 		size_t* nGLCt = interactionCounters + 1;
-		Node<DIM, Float>* nGList = nodeInteractionList;
-		initStack((Node<DIM, Float>*)nullptr, 0, nGList, nGLCt, 2 * INTERACTION_THRESHOLD);
+		NodeArray<DIM, Float> nGList = nodeInteractionList;
+		NodeArray<DIM, Float> dummyN;
+		initStack(dummyN, 0, nGList, nGLCt, 2 * INTERACTION_THRESHOLD);
 		
 		size_t* cLCt = bfsStackCounters + 2 * blockIdx.x;
-		Node<DIM, Float>* currentLevel = bfsStackBuffers + 2 * blockIdx.x * stackCapacity;
+		NodeArray<DIM, Float> currentLevel = bfsStackBuffers + 2 * blockIdx.x * stackCapacity;
 		
 		initStack(treeLevels[startDepth], treeCounts[startDepth], currentLevel, cLCt, stackCapacity);
 		
 		
 		size_t* nLCt = bfsStackCounters + 2 * blockIdx.x + 1;
-		Node<DIM, Float>* nextLevel = bfsStackBuffers + (2 * blockIdx.x + 1) * stackCapacity;
+		NodeArray<DIM, Float> nextLevel = bfsStackBuffers + (2 * blockIdx.x + 1) * stackCapacity;
 		
 		__syncthreads();
 		
@@ -114,7 +154,7 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfo<DIM, Fl
 					if(passesMAC(tgInfo, nodeHere, theta)){
 						if(INTERACTION_THRESHOLD > 0){
 							// Store to C/G list
-							pushAll(&nodeHere, 1, nGList, nGLCt);
+							pushAll(NodeArray<DIM, Float>(nodeHere), 1, nGList, nGLCt);
 						} else if(threadIdx.x < tgInfo.childCount){
 							//interaction = interaction + calc_force(particle.m, particle.pos, nodeHere.mass, nodeHere.barycenter, softening);
 						}
@@ -178,9 +218,7 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfo<DIM, Fl
 				startOfs -= blockDim.x;
 			}
 			
-			swap<Node<DIM, Float>*>(currentLevel, nextLevel);
-			size_t oldC = *cLCt;
-			size_t oldN = *nLCt;
+			swap<NodeArray<DIM, Float>>(currentLevel, nextLevel);
 			swap<size_t*>(cLCt, nLCt);
 			//printf("%lu and %lu swapped to %lu and %lu\n",oldC, oldN, *cLCt, *nLCt);
 			curDepth += 1;
@@ -194,33 +232,17 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfo<DIM, Fl
 	
 }
 
-template<size_t DIM, typename Float, size_t MAX_LEVELS>
-void makeDeviceTree(Node<DIM, Float>* treeLevels[MAX_LEVELS], Node<DIM, Float>* placeHolderTree[MAX_LEVELS], size_t treeCounts[MAX_LEVELS]){
-	for(size_t i = 0; i < MAX_LEVELS; i++){
-		Node<DIM, Float>* level;
-		gpuErrchk( (cudaMalloc(&level, treeCounts[i]*sizeof(Node<DIM, Float>)) )); // We know how big the tree is now. Don't make extra space
-		gpuErrchk( (cudaMemcpy(level, treeLevels[i], treeCounts[i]*sizeof(Node<DIM, Float>), cudaMemcpyHostToDevice)) );
-		placeHolderTree[i] = level;
-	}
-}
-
-template<size_t DIM, typename Float, size_t MAX_LEVELS>
-void freeDeviceTree(Node<DIM, Float>* placeHolderTree[MAX_LEVELS]){
-	for(size_t i = 0; i < MAX_LEVELS; i++){
-		gpuErrchk( (cudaFree(placeHolderTree[i])) );
-	}
-}
 
 // Something is badly wrong with template resolution if we switch to InteractionType here.
 // I think the compilers are doing name-mangling differently or something
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
-void traverseTreeCUDA(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t startDepth,
-					  Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], size_t n, Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions, Float softening, Float theta, size_t blockCt, size_t threadCt){
+void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo, size_t startDepth,
+					  NodeArray<DIM, Float> treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], size_t n, ParticleArray<DIM, Float> particles, VecArray<DIM, Float> interactions, Float softening, Float theta, size_t blockCt, size_t threadCt){
 	
-	Node<DIM, Float>* placeHolderLevels[MAX_LEVELS];
+	NodeArray<DIM, Float> placeHolderLevels[MAX_LEVELS];
 	makeDeviceTree<DIM, Float, MAX_LEVELS>(treeLevels, placeHolderLevels, treeCounts);
-	Node<DIM, Float>** cuTreeLevels;
-	gpuErrchk( (cudaMalloc(&cuTreeLevels, MAX_LEVELS*sizeof(Node<DIM, Float>*))) );
+	NodeArray<DIM, Float>* cuTreeLevels;
+	gpuErrchk( (cudaMalloc(&cuTreeLevels, MAX_LEVELS*sizeof(NodeArray<DIM, Float>))) );
 	gpuErrchk( (cudaMemcpy(cuTreeLevels, placeHolderLevels, sizeof(Node<DIM, Float>*), cudaMemcpyHostToDevice)) );
 	
 	size_t* cuTreeCounts;
@@ -234,22 +256,23 @@ void traverseTreeCUDA(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, siz
 	}
 	
 	const size_t stackCapacity = biggestRow;
-	Node<DIM, Float> *bfsStackBuffers;
+	NodeArray<DIM, Float> bfsStackBuffers;
 	size_t * bfsStackCounters;
-	gpuErrchk( (cudaMalloc(&bfsStackBuffers, blockCt * 2 * stackCapacity * sizeof(Node<DIM, Float>))) );
+	allocDeviceNodeArray(blockCt * 2 * stackCapacity, bfsStackBuffers);
 	gpuErrchk( (cudaMalloc(&bfsStackCounters, blockCt * 2 * sizeof(size_t))) );
 	
 	
-	GroupInfo<DIM, Float, PPG>* cuGroupInfo;
-	gpuErrchk( (cudaMalloc(&cuGroupInfo, nGroups * sizeof(GroupInfo<DIM, Float, PPG>))) );
-	gpuErrchk( (cudaMemcpy(cuGroupInfo, groupInfo, nGroups * sizeof(GroupInfo<DIM, Float, PPG>), cudaMemcpyHostToDevice)) );
+	GroupInfoArray<DIM, Float, PPG> cuGroupInfo;
+	allocDeviceGroupInfoArray(nGroups, cuGroupInfo);
+	copyDeviceGroupInfoArray(nGroups, cuGroupInfo, groupInfo,  cudaMemcpyHostToDevice);
 	
-	Particle<DIM, Float>* cuParticles;
-	gpuErrchk( (cudaMalloc(&cuParticles, n * sizeof(Particle<DIM, Float>))) );
-	gpuErrchk( (cudaMemcpy(cuParticles, particles, n * sizeof(Particle<DIM, Float>), cudaMemcpyHostToDevice)) );
-	InteractionType<DIM, Float, Mode>* cuInteractions;
-	gpuErrchk( (cudaMalloc(&cuInteractions, n * sizeof(InteractionType<DIM, Float, Mode>))) );
-	gpuErrchk( (cudaMemcpy(cuInteractions, interactions, n * sizeof(InteractionType<DIM, Float, Mode>), cudaMemcpyHostToDevice)) );
+	ParticleArray<DIM, Float> cuParticles;
+	allocDeviceParticleArray(n, cuParticles);
+	copyDeviceParticleArray(n, cuParticles, particles, cudaMemcpyHostToDevice);
+	
+	InteractionTypeArray<DIM, Float, Mode> cuInteractions;
+	allocDeviceVecArray(n, cuInteractions);
+	copyDeviceVecArray(n, cuInteractions, interactions, cudaMemcpyHostToDevice);
 	
 	dim3 dimGrid(blockCt);
 	dim3 dimBlock(threadCt);
@@ -259,12 +282,13 @@ void traverseTreeCUDA(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, siz
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
 	
-	gpuErrchk( (cudaMemcpy(interactions, cuInteractions, n * sizeof(InteractionType<DIM, Float, Mode>), cudaMemcpyDeviceToHost)) );
-	
-	gpuErrchk( (cudaFree(cuInteractions)) );
-	gpuErrchk( (cudaFree(cuParticles)) );
-	gpuErrchk( (cudaFree(cuGroupInfo)) );
-	gpuErrchk( (cudaFree(bfsStackBuffers)) );
+	copyDeviceVecArray(n, interactions, cuInteractions, cudaMemcpyDeviceToHost);
+
+	freeDeviceVecArray(cuInteractions);
+	freeDeviceParticleArray(cuParticles);
+	freeDeviceGroupInfoArray(cuGroupInfo);
+	freeDeviceNodeArray(bfsStackBuffers);
+	gpuErrchk( (cudaFree(bfsStackCounters)) );
 	gpuErrchk( (cudaFree(cuTreeCounts)) );
 	freeDeviceTree<DIM, Float, MAX_LEVELS>(placeHolderLevels);
 	gpuErrchk( (cudaFree(cuTreeLevels)) );
@@ -273,6 +297,6 @@ void traverseTreeCUDA(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, siz
 	
 }
 
-template void traverseTreeCUDA<3, float, 16, 8, 8, Forces>(size_t, GroupInfo<3, float, 16> *, size_t, Node<3, float> **, size_t *, size_t, Particle<3, float> *, InteractionType<3, float, Forces> *, float, float, size_t, size_t);
+template void traverseTreeCUDA<3, float, 16, 8, 8, Forces>(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray<3, float, Forces>, float, float, size_t, size_t);
 
 

@@ -46,6 +46,7 @@
 		E9397DB21AB2A1D7002AD86B /* plummer10k.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer10k.dat; path = data/plummer10k.dat; sourceTree = "<group>"; };
 		E9397DB31AB2A1D7002AD86B /* plummer100.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer100.dat; path = data/plummer100.dat; sourceTree = "<group>"; };
 		E9397DB41AB2A1D7002AD86B /* plummer100k.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer100k.dat; path = data/plummer100k.dat; sourceTree = "<group>"; };
+		E966CD161AB6D70F00433ACD /* CudaArrayCopyUtils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = CudaArrayCopyUtils.h; path = ../CudaArrayCopyUtils.h; sourceTree = "<group>"; };
 		E98A885D1AB2D3F400E64D76 /* Miniball.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Miniball.hpp; sourceTree = SOURCE_ROOT; };
 		E9E910171AB65DB200A0E4D6 /* treecode.cu.cpp.ii */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp.preprocessed; path = treecode.cu.cpp.ii; sourceTree = "<group>"; };
 		E9E9101B1AB6636700A0E4D6 /* treecodeCU.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = treecodeCU.h; sourceTree = SOURCE_ROOT; };
@@ -90,6 +91,7 @@
 		E9397DA21AB2A06C002AD86B /* TreeTraverse */ = {
 			isa = PBXGroup;
 			children = (
+				E966CD161AB6D70F00433ACD /* CudaArrayCopyUtils.h */,
 				E9397DAA1AB2A0DB002AD86B /* makeplummer.py */,
 				E9397DAB1AB2A0DB002AD86B /* treecode.cu */,
 				E9397DAC1AB2A0DB002AD86B /* treedefs.h */,
@@ -356,6 +358,7 @@
 				E9E910161AB65D3000A0E4D6 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
