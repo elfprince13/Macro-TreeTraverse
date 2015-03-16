@@ -1,15 +1,23 @@
 // We want to transform AOS into SOA wherever possible!
 // This is something we can do with a macro =)
 
+
+#ifdef __CUDA_ARCH__
+#include <cuda.h>
+#include <device_functions.h>
+#define UNIVERSAL_STORAGE __host__ __device__
+#else
 #include <cstddef>
 #include <cmath>
+#define UNIVERSAL_STORAGE
+#endif
 
 typedef unsigned short uint16;
 
 template<size_t DIM, typename T> struct Vec{
 	T x[DIM];
 
-	inline Vec<DIM, T> operator -(const Vec<DIM, T> &v) const{
+	UNIVERSAL_STORAGE inline Vec<DIM, T> operator -(const Vec<DIM, T> &v) const{
 		Vec<DIM, T> out;
 		for(size_t i = 0; i < DIM; i++){
 			out.x[i] = this->x[i] - v.x[i];
@@ -17,7 +25,7 @@ template<size_t DIM, typename T> struct Vec{
 		return out;
 	}
 	
-	inline Vec<DIM, bool> operator <(const Vec<DIM, T> &v) const{
+	UNIVERSAL_STORAGE inline Vec<DIM, bool> operator <(const Vec<DIM, T> &v) const{
 		Vec<DIM, bool> out;
 		for(size_t i = 0; i < DIM; i++){
 			out.x[i] = this->x[i] < v.x[i];
@@ -25,7 +33,7 @@ template<size_t DIM, typename T> struct Vec{
 		return out;
 	}
 	
-	inline Vec<DIM, T> operator +(const Vec<DIM, T> &v) const{
+	UNIVERSAL_STORAGE inline Vec<DIM, T> operator +(const Vec<DIM, T> &v) const{
 		Vec<DIM, T> out;
 		for(size_t i = 0; i < DIM; i++){
 			out.x[i] = this->x[i] + v.x[i];
@@ -33,7 +41,7 @@ template<size_t DIM, typename T> struct Vec{
 		return out;
 	}
 	
-	inline Vec<DIM, T> operator *(T s) const{
+	UNIVERSAL_STORAGE inline Vec<DIM, T> operator *(T s) const{
 		Vec<DIM, T> out;
 		for(size_t i = 0; i < DIM; i++){
 			out.x[i] = this->x[i] * s;
@@ -41,7 +49,7 @@ template<size_t DIM, typename T> struct Vec{
 		return out;
 	}
 	
-	inline Vec<DIM, T> operator /(T s) const{
+	UNIVERSAL_STORAGE inline Vec<DIM, T> operator /(T s) const{
 		Vec<DIM, T> out;
 		for(size_t i = 0; i < DIM; i++){
 			out.x[i] = this->x[i] / s;
@@ -49,7 +57,7 @@ template<size_t DIM, typename T> struct Vec{
 		return out;
 	}
 	
-	inline Vec<DIM, T> operator *(const Vec<DIM, T> &v) const{
+	UNIVERSAL_STORAGE inline Vec<DIM, T> operator *(const Vec<DIM, T> &v) const{
 		Vec<DIM, T> out;
 		for(size_t i = 0; i < DIM; i++){
 			out.x[i] = this->x[i] * v.x[i];
@@ -57,7 +65,7 @@ template<size_t DIM, typename T> struct Vec{
 		return out;
 	}
 	
-	inline Vec<DIM, T> operator /(const Vec<DIM, T> &v) const{
+	UNIVERSAL_STORAGE inline Vec<DIM, T> operator /(const Vec<DIM, T> &v) const{
 		Vec<DIM, T> out;
 		for(size_t i = 0; i < DIM; i++){
 			out.x[i] = this->x[i] / v.x[i];
@@ -89,7 +97,7 @@ OT zIndex(Vec<DIM, T> v, Vec<DIM, T> mN, Vec<DIM, T> mX) {
  */
 
 
-template<size_t DIM, typename T> bool contains(const Vec<DIM, T> &lower, const Vec<DIM, T> &upper, const Vec<DIM, T> point){
+template<size_t DIM, typename T> UNIVERSAL_STORAGE bool contains(const Vec<DIM, T> &lower, const Vec<DIM, T> &upper, const Vec<DIM, T> point){
 	bool is_contained = true;
 	for(size_t i = 0; is_contained && i < DIM; i++){
 		is_contained &= (lower.x[i] <= point.x[i]) && (upper.x[i] >= point.x[i]);
@@ -97,7 +105,7 @@ template<size_t DIM, typename T> bool contains(const Vec<DIM, T> &lower, const V
 	return is_contained;
 }
 
-template<size_t DIM, typename T> Vec<DIM, T> min(const Vec<DIM, T> &v1, const Vec<DIM, T> &v2){
+template<size_t DIM, typename T> Vec<DIM, T> UNIVERSAL_STORAGE min(const Vec<DIM, T> &v1, const Vec<DIM, T> &v2){
 	Vec<DIM, T> ret;
 	for(size_t i = 0; i < DIM; i++){
 		ret.x[i] = (v1.x[i] < v2.x[i]) ? v1.x[i] : v2.x[i];
@@ -106,7 +114,7 @@ template<size_t DIM, typename T> Vec<DIM, T> min(const Vec<DIM, T> &v1, const Ve
 }
 
 
-template<size_t DIM, typename T> Vec<DIM, T> max(const Vec<DIM, T> &v1, const Vec<DIM, T> &v2){
+template<size_t DIM, typename T> Vec<DIM, T> UNIVERSAL_STORAGE max(const Vec<DIM, T> &v1, const Vec<DIM, T> &v2){
 	Vec<DIM, T> ret;
 	for(size_t i = 0; i < DIM; i++){
 		ret.x[i] = (v1.x[i] > v2.x[i]) ? v1.x[i] : v2.x[i];
@@ -115,7 +123,7 @@ template<size_t DIM, typename T> Vec<DIM, T> max(const Vec<DIM, T> &v1, const Ve
 }
 
 
-template<size_t DIM, typename T> T mag_sq(const Vec<DIM, T> &v){
+template<size_t DIM, typename T> T UNIVERSAL_STORAGE mag_sq(const Vec<DIM, T> &v){
 	T ret = 0;
 	for(size_t i = 0; i < DIM; i++){
 		ret += v.x[i] * v.x[i];
@@ -124,7 +132,7 @@ template<size_t DIM, typename T> T mag_sq(const Vec<DIM, T> &v){
 }
 
 
-template<size_t DIM, typename T> T mag(const Vec<DIM, T> &v){
+template<size_t DIM, typename T> T UNIVERSAL_STORAGE mag(const Vec<DIM, T> &v){
 	return (T) sqrt(mag_sq(v));
 }
 

@@ -1,4 +1,5 @@
 #include "treedefs.h"
+#include "treecodeCU.h"
 #include <iostream>
 #include <limits>
 #include <vector>
@@ -354,8 +355,6 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 }
 
 
-
-
 #define DIM 3
 #define Float float
 #define DT 0.001
@@ -365,6 +364,8 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 #define MAX_LEVELS 8
 #define NODE_THRESHOLD 16
 #define N_GROUP 16
+#define TPPB 128
+#define INTERACTION_THRESHOLD (TPPB / N_GROUP)
 
 int main(int argc, char* argv[]) {
 	int nPs = atoi(argv[1]);
@@ -429,7 +430,7 @@ int main(int argc, char* argv[]) {
 	
 	
 	
-	
+	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA, groups.size(), TPPB);
 	
 	delete_tree<DIM, MAX_LEVELS, Float>(tree);
 	

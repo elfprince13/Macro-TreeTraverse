@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		E9397DAE1AB2A0DB002AD86B /* treetester.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E9397DAD1AB2A0DB002AD86B /* treetester.cpp */; };
 		E9E910181AB65DB200A0E4D6 /* treecode.cu.cpp.ii in Sources */ = {isa = PBXBuildFile; fileRef = E9E910171AB65DB200A0E4D6 /* treecode.cu.cpp.ii */; };
+		E9E9101F1AB6701500A0E4D6 /* libcudart_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E9E9101E1AB6701500A0E4D6 /* libcudart_static.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,8 @@
 		E9397DB41AB2A1D7002AD86B /* plummer100k.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer100k.dat; path = data/plummer100k.dat; sourceTree = "<group>"; };
 		E98A885D1AB2D3F400E64D76 /* Miniball.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Miniball.hpp; sourceTree = SOURCE_ROOT; };
 		E9E910171AB65DB200A0E4D6 /* treecode.cu.cpp.ii */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp.preprocessed; path = treecode.cu.cpp.ii; sourceTree = "<group>"; };
+		E9E9101B1AB6636700A0E4D6 /* treecodeCU.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = treecodeCU.h; sourceTree = SOURCE_ROOT; };
+		E9E9101E1AB6701500A0E4D6 /* libcudart_static.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libcudart_static.a; path = "../../../../../../Developer/NVIDIA/CUDA-7.0/lib/libcudart_static.a"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E9E9101F1AB6701500A0E4D6 /* libcudart_static.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -62,6 +66,7 @@
 		E9397D971AB2A06C002AD86B = {
 			isa = PBXGroup;
 			children = (
+				E9E9101E1AB6701500A0E4D6 /* libcudart_static.a */,
 				E9397DAF1AB2A1C8002AD86B /* Data */,
 				E9397DA21AB2A06C002AD86B /* TreeTraverse */,
 				E9397DA11AB2A06C002AD86B /* Products */,
@@ -85,6 +90,7 @@
 				E9397DAC1AB2A0DB002AD86B /* treedefs.h */,
 				E98A885D1AB2D3F400E64D76 /* Miniball.hpp */,
 				E9397DAD1AB2A0DB002AD86B /* treetester.cpp */,
+				E9E9101B1AB6636700A0E4D6 /* treecodeCU.h */,
 			);
 			path = TreeTraverse;
 			sourceTree = "<group>";
@@ -106,7 +112,7 @@
 /* Begin PBXLegacyTarget section */
 		E9E910131AB65D3000A0E4D6 /* TreeTraverse-CUDA */ = {
 			isa = PBXLegacyTarget;
-			buildArgumentsString = "-std=c++11 -v -cuda treecode.cu";
+			buildArgumentsString = "-arch=compute_30 -code=sm_30 -std=c++11 -v -cuda treecode.cu";
 			buildConfigurationList = E9E910141AB65D3000A0E4D6 /* Build configuration list for PBXLegacyTarget "TreeTraverse-CUDA" */;
 			buildPhases = (
 			);
@@ -272,6 +278,10 @@
 		E9397DA81AB2A06C002AD86B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				LIBRARY_SEARCH_PATHS = (
+					"/Developer/NVIDIA/CUDA-7.0/nvvm/lib",
+					"/Developer/NVIDIA/CUDA-7.0/lib",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -279,6 +289,10 @@
 		E9397DA91AB2A06C002AD86B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				LIBRARY_SEARCH_PATHS = (
+					"/Developer/NVIDIA/CUDA-7.0/nvvm/lib",
+					"/Developer/NVIDIA/CUDA-7.0/lib",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
