@@ -1,5 +1,6 @@
 #include "treedefs.h"
 #include "treecodeCU.h"
+#include "cudahelper.h"
 
 
 //: We should really be using native CUDA vectors for this.... but that requires more funny typing magic to convert the CPU data
@@ -167,6 +168,9 @@ void traverseTreeCUDA(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, siz
 	const size_t stackCapacity = 0;
 	
 	traverseTreeKernel<DIM, Float, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<blockCt, threadCt>>>(nGroups, groupInfo, startDepth, treeLevels, treeCounts, particles, interactions, softening, theta, bfsStackBuffers, stackCapacity);
+	gpuErrchk( cudaPeekAtLastError() );
+	gpuErrchk( cudaDeviceSynchronize() );
+	
 	
 }
 

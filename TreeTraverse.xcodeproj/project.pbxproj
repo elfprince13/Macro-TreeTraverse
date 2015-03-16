@@ -10,6 +10,7 @@
 		E9397DAE1AB2A0DB002AD86B /* treetester.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E9397DAD1AB2A0DB002AD86B /* treetester.cpp */; };
 		E9E910181AB65DB200A0E4D6 /* treecode.cu.cpp.ii in Sources */ = {isa = PBXBuildFile; fileRef = E9E910171AB65DB200A0E4D6 /* treecode.cu.cpp.ii */; };
 		E9E9101F1AB6701500A0E4D6 /* libcudart_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E9E9101E1AB6701500A0E4D6 /* libcudart_static.a */; };
+		E9E910221AB67D4600A0E4D6 /* libcudadevrt.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E9E910211AB67D4600A0E4D6 /* libcudadevrt.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -49,6 +50,8 @@
 		E9E910171AB65DB200A0E4D6 /* treecode.cu.cpp.ii */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp.preprocessed; path = treecode.cu.cpp.ii; sourceTree = "<group>"; };
 		E9E9101B1AB6636700A0E4D6 /* treecodeCU.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = treecodeCU.h; sourceTree = SOURCE_ROOT; };
 		E9E9101E1AB6701500A0E4D6 /* libcudart_static.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libcudart_static.a; path = "../../../../../../Developer/NVIDIA/CUDA-7.0/lib/libcudart_static.a"; sourceTree = "<group>"; };
+		E9E910201AB6794800A0E4D6 /* cudahelper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cudahelper.h; sourceTree = SOURCE_ROOT; };
+		E9E910211AB67D4600A0E4D6 /* libcudadevrt.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libcudadevrt.a; path = "../../../../../../Developer/NVIDIA/CUDA-7.0/lib/libcudadevrt.a"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -56,6 +59,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E9E910221AB67D4600A0E4D6 /* libcudadevrt.a in Frameworks */,
 				E9E9101F1AB6701500A0E4D6 /* libcudart_static.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -66,6 +70,7 @@
 		E9397D971AB2A06C002AD86B = {
 			isa = PBXGroup;
 			children = (
+				E9E910211AB67D4600A0E4D6 /* libcudadevrt.a */,
 				E9E9101E1AB6701500A0E4D6 /* libcudart_static.a */,
 				E9397DAF1AB2A1C8002AD86B /* Data */,
 				E9397DA21AB2A06C002AD86B /* TreeTraverse */,
@@ -91,6 +96,7 @@
 				E98A885D1AB2D3F400E64D76 /* Miniball.hpp */,
 				E9397DAD1AB2A0DB002AD86B /* treetester.cpp */,
 				E9E9101B1AB6636700A0E4D6 /* treecodeCU.h */,
+				E9E910201AB6794800A0E4D6 /* cudahelper.h */,
 			);
 			path = TreeTraverse;
 			sourceTree = "<group>";
