@@ -161,6 +161,7 @@ enum TraverseMode {
 	Forces
 };
 
+//#ifndef _COMPILE_FOR_CUDA_
 // Double the metaprogramming techniques, double the fun
 constexpr size_t InteractionElems(TraverseMode Mode, size_t DIM){
 	return (Mode == CountOnly || Mode == HashInteractions) ? 2 : DIM;
@@ -168,6 +169,8 @@ constexpr size_t InteractionElems(TraverseMode Mode, size_t DIM){
 
 template <size_t DIM, typename Float, TraverseMode Mode>
 using  InteractionType = Vec<InteractionElems(Mode, DIM) , typename std::conditional<Mode == CountOnly || Mode == HashInteractions, size_t, Float>::type >;
+
+//#endif
 
 /*
 
