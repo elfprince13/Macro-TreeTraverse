@@ -18,12 +18,13 @@ template<template<size_t, typename> class StackElms, size_t DIM, typename Float>
 	if(threadIdx.x < levelCt){
 		stack[threadIdx.x] = level[threadIdx.x];
 	}
-	 //*/
+	//*/
 	//*
 	if(threadIdx.x == 0){
 		*stackCt = levelCt; // We are initializing the stack, so no need to increment previous value
+		//printf("%d.%d: %lu = %lu\n", blockIdx.x, threadIdx.x, *stackCt, levelCt);
 	}
-	 //*/
+	//*/
 }
 
 template<template<size_t, typename> class StackElms, size_t DIM, typename Float> __device__ void pushAll(const StackElms<DIM, Float>* nodes, const size_t nodeCt, StackElms<DIM, Float>* stack, size_t* stackCt){
@@ -61,119 +62,134 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfo<DIM, Fl
 								   const Float softening, const Float theta,
 								   size_t *bfsStackCounters, Node<DIM, Float> *bfsStackBuffers, const size_t stackCapacity) {
 	
-	__shared__ unsigned char smem[2 * sizeof(size_t) + 2 * INTERACTION_THRESHOLD * (sizeof(Node<DIM, Float>) + sizeof(Particle<DIM, Float>))];
+	__shared__ size_t interactionCounters[2];
+	__shared__ Particle<DIM, Float> particleInteractionList[2*INTERACTION_THRESHOLD];
+	__shared__ Node<DIM, Float> nodeInteractionList[2*INTERACTION_THRESHOLD];
 	
 	if(blockIdx.x >= nGroups) return; // This probably shouldn't happen?
 	else {
 		GroupInfo<DIM, Float, PPG> tgInfo = groupInfo[blockIdx.x];
 		int threadsPerPart = blockDim.x / tgInfo.childCount;
-		if(threadIdx.x > threadsPerPart * tgInfo.childCount) return; // Really shouldn't do this with __syncthreads!
-		else {
-			
-			size_t* pGLCt = (size_t*)smem;
-			Particle<DIM, Float>* pGList = (Particle<DIM, Float>*)(smem + sizeof(size_t));
-			initStack((Particle<DIM, Float>*)nullptr, 0, pGList, pGLCt, 2 * INTERACTION_THRESHOLD);
-			
-			size_t* nGLCt = (size_t*)(smem + sizeof(size_t) + 2 * INTERACTION_THRESHOLD * sizeof(Particle<DIM, Float>));
-			Node<DIM, Float>* nGList = (Node<DIM, Float>*)(smem + 2 * (sizeof(size_t) + INTERACTION_THRESHOLD * sizeof(Particle<DIM, Float>)));
-			initStack((Node<DIM, Float>*)nullptr, 0, nGList, nGLCt, 2 * INTERACTION_THRESHOLD);
-			
-			size_t* cLCt = bfsStackCounters + 2 * blockIdx.x;
-			Node<DIM, Float>* currentLevel = bfsStackBuffers + 2 * blockIdx.x * stackCapacity;
-			
-			initStack(treeLevels[startDepth], treeCounts[startDepth], currentLevel, cLCt, stackCapacity);
-			
-			 
-			size_t* nLCt = bfsStackCounters + 2 * blockIdx.x + 1;
-			Node<DIM, Float>* nextLevel = bfsStackBuffers + (2 * blockIdx.x + 1) * stackCapacity;
-			
+		
+		
+		size_t* pGLCt = interactionCounters;
+		Particle<DIM, Float>* pGList = particleInteractionList;
+		initStack((Particle<DIM, Float>*)nullptr, 0, pGList, pGLCt, 2 * INTERACTION_THRESHOLD);
+		
+		size_t* nGLCt = interactionCounters + 1;
+		Node<DIM, Float>* nGList = nodeInteractionList;
+		initStack((Node<DIM, Float>*)nullptr, 0, nGList, nGLCt, 2 * INTERACTION_THRESHOLD);
+		
+		size_t* cLCt = bfsStackCounters + 2 * blockIdx.x;
+		Node<DIM, Float>* currentLevel = bfsStackBuffers + 2 * blockIdx.x * stackCapacity;
+		
+		initStack(treeLevels[startDepth], treeCounts[startDepth], currentLevel, cLCt, stackCapacity);
+		
+		
+		size_t* nLCt = bfsStackCounters + 2 * blockIdx.x + 1;
+		Node<DIM, Float>* nextLevel = bfsStackBuffers + (2 * blockIdx.x + 1) * stackCapacity;
+		
+		__syncthreads();
+		
+		Particle<DIM, Float> particle;
+		if(threadIdx.x > threadsPerPart * tgInfo.childCount){
+			particle = particles[tgInfo.childStart + (threadIdx.x % tgInfo.childCount)];
+		}
+		
+		
+		InteractionType<DIM, Float, Mode> interaction = freshInteraction<DIM, Float, Mode>();
+		size_t curDepth = startDepth;
+		while(*cLCt != 0 ){//&& curDepth < MAX_LEVELS){ // Second condition shouldn't matter....
+			if(threadIdx.x == 0){
+				*nLCt = 0;
+			}
 			__syncthreads();
 			
-			Particle<DIM, Float> particle = particles[tgInfo.childStart + (threadIdx.x % tgInfo.childCount)];
-			
-			
-			InteractionType<DIM, Float, Mode> interaction = freshInteraction<DIM, Float, Mode>();
-			size_t curDepth = startDepth;
-			//*
-			 
-			while(*cLCt != 0){
-				if(threadIdx.x == 0){
-					*nLCt = 0;
-				}
-				__syncthreads();
-			
-				size_t startOfs = *cLCt;
-				while(startOfs > 0){
-					ptrdiff_t toGrab = startOfs - blockDim.x + threadIdx.x;
-					if(toGrab >= 0){
-						Node<DIM, Float> nodeHere = currentLevel[toGrab];
-						if(passesMAC(tgInfo, nodeHere, theta)){
+			ptrdiff_t startOfs = *cLCt;
+			while(startOfs > 0){
+				ptrdiff_t toGrab = startOfs - blockDim.x + threadIdx.x;
+				if(toGrab >= 0){
+					Node<DIM, Float> nodeHere = currentLevel[toGrab];
+					//*
+					if(passesMAC(tgInfo, nodeHere, theta)){
+						if(INTERACTION_THRESHOLD > 0){
+							// Store to C/G list
+							pushAll(&nodeHere, 1, nGList, nGLCt);
+						} else if(threadIdx.x < tgInfo.childCount){
+							//interaction = interaction + calc_force(particle.m, particle.pos, nodeHere.mass, nodeHere.barycenter, softening);
+						}
+					} else {
+						if(nodeHere.isLeaf){
 							if(INTERACTION_THRESHOLD > 0){
-								// Store to C/G list
-								pushAll(&nodeHere, 1, nGList, nGLCt);
-							} else if(threadIdx.x < tgInfo.childCount){
-								interaction = interaction + calc_force(particle.m, particle.pos, nodeHere.mass, nodeHere.barycenter, softening);
-							}
-						} else {
-							if(nodeHere.isLeaf){
-								if(INTERACTION_THRESHOLD > 0){
-									// Store to P/G list
-									pushAll(particles + nodeHere.childStart, nodeHere.childCount, pGList, pGLCt);
-								} else {
-									for(size_t pI = nodeHere.childCount; pI > 0; pI -= threadsPerPart ){
-										ptrdiff_t toGrab = pI - threadsPerPart + (threadIdx.x / tgInfo.childCount);
-										if(toGrab >= 0){
-											interaction = interaction + calc_force(particle.m, particle.pos, particles[nodeHere.childStart + toGrab].m, particles[nodeHere.childStart + toGrab].pos, softening);
-										}
+								// Store to P/G list
+								//pushAll(particles + nodeHere.childStart, nodeHere.childCount, pGList, pGLCt);
+							} else {
+								/*
+								for(size_t pI = nodeHere.childCount; pI > 0; pI -= threadsPerPart ){
+									ptrdiff_t toGrab = pI - threadsPerPart + (threadIdx.x / tgInfo.childCount);
+									if(toGrab >= 0){
+										interaction = interaction + calc_force(particle.m, particle.pos, particles[nodeHere.childStart + toGrab].m, particles[nodeHere.childStart + toGrab].pos, softening);
 									}
 								}
-							} else {
-								pushAll(treeLevels[curDepth + 1] + nodeHere.childStart, nodeHere.childCount, nextLevel, nLCt);
+								 */
 							}
+						} else {
+							//printf("%d.%d: %lu %lu %lu %lu\n", blockIdx.x, threadIdx.x, curDepth, nodeHere.childStart, nodeHere.childCount, *nLCt);
+							//if(curDepth + 1 < MAX_LEVELS && nodeHere.childStart < treeCounts[curDepth + 1]){
+							pushAll(treeLevels[curDepth + 1] + nodeHere.childStart, nodeHere.childCount, nextLevel, nLCt);
+							//}
 						}
 					}
-					__syncthreads();
-					if(INTERACTION_THRESHOLD > 0){ // Can't diverge, compile-time constant
-						ptrdiff_t innerStartOfs;
-						for(innerStartOfs = *nGLCt; innerStartOfs >= INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
-							ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
-							if(toGrab >= 0){
-								interaction = interaction + calc_force(particle.m, particle.pos, nGList[toGrab].mass, nGList[toGrab].barycenter, softening);
-							}
-						}
-						// Need to update stack pointer
-						if(threadIdx.x == 0){
-							*nGLCt = (innerStartOfs < 0) ? 0 : innerStartOfs;
-						}
-						
-						for(innerStartOfs = *pGLCt; innerStartOfs >= INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
-							ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
-							if(toGrab >= 0){
-								interaction = interaction + calc_force(particle.m, particle.pos, pGList[toGrab].m, pGList[toGrab].pos, softening);
-							}
-						}
-						// Need to update stack pointer
-						// Need to update stack pointer
-						if(threadIdx.x == 0){
-							*pGLCt = (innerStartOfs < 0) ? 0 : innerStartOfs;
-						}
-
-						
-					}
-					
-					
-					startOfs -= blockDim.x;
+					//*/
 				}
 				
-				swap<Node<DIM, Float>*>(currentLevel, nextLevel);
-				swap<size_t*>(cLCt, nLCt);
-				curDepth += 1;
+				/*
+					__syncthreads();
+					if(INTERACTION_THRESHOLD > 0){ // Can't diverge, compile-time constant
+				 ptrdiff_t innerStartOfs;
+				 for(innerStartOfs = *nGLCt; innerStartOfs >= INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
+				 ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
+				 if(toGrab >= 0){
+				 interaction = interaction + calc_force(particle.m, particle.pos, nGList[toGrab].mass, nGList[toGrab].barycenter, softening);
+				 }
+				 }
+				 // Need to update stack pointer
+				 if(threadIdx.x == 0){
+				 *nGLCt = (innerStartOfs < 0) ? 0 : innerStartOfs;
+				 }
+				 
+				 for(innerStartOfs = *pGLCt; innerStartOfs >= INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
+				 ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
+				 if(toGrab >= 0){
+				 interaction = interaction + calc_force(particle.m, particle.pos, pGList[toGrab].m, pGList[toGrab].pos, softening);
+				 }
+				 }
+				 // Need to update stack pointer
+				 // Need to update stack pointer
+				 if(threadIdx.x == 0){
+				 *pGLCt = (innerStartOfs < 0) ? 0 : innerStartOfs;
+				 }
+				 
+				 
+					}
+					//*/
+				
+				
+				startOfs -= blockDim.x;
 			}
 			
-			// Process remaining interactions and reduce if multithreading in play
-			 
-			 //*/
+			swap<Node<DIM, Float>*>(currentLevel, nextLevel);
+			size_t oldC = *cLCt;
+			size_t oldN = *nLCt;
+			swap<size_t*>(cLCt, nLCt);
+			//printf("%lu and %lu swapped to %lu and %lu\n",oldC, oldN, *cLCt, *nLCt);
+			curDepth += 1;
 		}
+		
+		// Process remaining interactions and reduce if multithreading in play
+		
+		//*/
+		
 	}
 	
 }
@@ -199,7 +215,7 @@ void freeDeviceTree(Node<DIM, Float>* placeHolderTree[MAX_LEVELS]){
 // I think the compilers are doing name-mangling differently or something
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
 void traverseTreeCUDA(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t startDepth,
-				  Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], size_t n, Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions, Float softening, Float theta, size_t blockCt, size_t threadCt){
+					  Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], size_t n, Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions, Float softening, Float theta, size_t blockCt, size_t threadCt){
 	
 	Node<DIM, Float>* placeHolderLevels[MAX_LEVELS];
 	makeDeviceTree<DIM, Float, MAX_LEVELS>(treeLevels, placeHolderLevels, treeCounts);
@@ -222,12 +238,12 @@ void traverseTreeCUDA(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, siz
 	size_t * bfsStackCounters;
 	gpuErrchk( (cudaMalloc(&bfsStackBuffers, blockCt * 2 * stackCapacity * sizeof(Node<DIM, Float>))) );
 	gpuErrchk( (cudaMalloc(&bfsStackCounters, blockCt * 2 * sizeof(size_t))) );
-
+	
 	
 	GroupInfo<DIM, Float, PPG>* cuGroupInfo;
 	gpuErrchk( (cudaMalloc(&cuGroupInfo, nGroups * sizeof(GroupInfo<DIM, Float, PPG>))) );
 	gpuErrchk( (cudaMemcpy(cuGroupInfo, groupInfo, nGroups * sizeof(GroupInfo<DIM, Float, PPG>), cudaMemcpyHostToDevice)) );
-
+	
 	Particle<DIM, Float>* cuParticles;
 	gpuErrchk( (cudaMalloc(&cuParticles, n * sizeof(Particle<DIM, Float>))) );
 	gpuErrchk( (cudaMemcpy(cuParticles, particles, n * sizeof(Particle<DIM, Float>), cudaMemcpyHostToDevice)) );
