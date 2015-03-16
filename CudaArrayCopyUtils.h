@@ -75,6 +75,10 @@ template<size_t DIM, typename Float> void copyDeviceNodeArray(size_t width, Node
 	size_t countBytes = width*sizeof(size_t);
 	gpuErrchk( (cudaMemcpy(level.childCount, src.childCount, countBytes, dir)) );
 	gpuErrchk( (cudaMemcpy(level.childStart, src.childStart, countBytes, dir)) );
+	for(size_t i = 0; i < width; i++){
+		printf("(%lu %lu)\t",src.childCount[i],src.childStart[i]);
+	}
+	printf("\n");
 	
 	
 	
@@ -111,8 +115,13 @@ void makeDeviceTree(NodeArray<DIM, Float> treeLevels[MAX_LEVELS], NodeArray<DIM,
 	for(size_t i = 0; i < MAX_LEVELS; i++){
 		NodeArray<DIM, Float> level;
 		
+		printf("Copying level:%lu\n\t",i);
+		
 		allocDeviceNodeArray(treeCounts[i], level);
 		copyDeviceNodeArray(treeCounts[i], level, treeLevels[i], cudaMemcpyHostToDevice);
+		for(size_t j = 0; j < treeCounts[i]; j++){
+			printf("(%lu %lu)\t",treeLevels[i].childCount[j], treeLevels[i].childStart[j]);
+		} printf("\n");
 		
 		placeHolderTree[i] = level;
 	}
@@ -184,6 +193,10 @@ template<size_t DIM, typename Float, size_t MAX_PARTS> void copyDeviceGroupInfoA
 	size_t countBytes = width*sizeof(size_t);
 	gpuErrchk( (cudaMemcpy(dst.childCount, src.childCount, countBytes, dir)) );
 	gpuErrchk( (cudaMemcpy(dst.childStart, src.childStart, countBytes, dir)) );
+	for(size_t i = 0; i < width; i++){
+		printf("%lu\t",src.childCount[i]);
+	}
+	printf("\n");
 	
 	
 	size_t floatBytes = width*sizeof(Float);

@@ -11,6 +11,7 @@
 #else
 #include <cstddef>
 #include <cmath>
+#include <cstdio>
 #define UNIVERSAL_STORAGE
 #endif
 
@@ -123,6 +124,12 @@ template <size_t DIM, typename T> struct VecArray{
 	}
 	
 	UNIVERSAL_STORAGE inline VecArray<DIM, T> operator +(size_t i) const {
+#ifdef __CUDA_ARCH__
+		if(threadIdx.x == 0 && blockIdx.x == 0){
+			printf("Making a new array from %p to %p by incrementing %lu\n",x[0],x[0]+i,i);
+		}
+#endif
+		
 		VecArray<DIM, T> o;
 		for(size_t j = 0; j < DIM; j++){
 			o.x[j] = x[j] + i;
@@ -213,6 +220,7 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct _ArrayGroupInfoProxy{
 	UNIVERSAL_STORAGE inline _ArrayGroupInfoProxy<DIM, T, MAX_PARTS>& operator=(const GroupInfo<DIM, T, MAX_PARTS> &v) {
 		*childCount = v.childCount;
 		*childStart = v.childStart;
+		//printf("Group info copying to proxy: %lu %lu %lu %lu\n",v.childCount,*childCount,v.childStart,*childStart);
 		minX = v.minX;
 		maxX = v.maxX;
 		center = v.center;
@@ -307,6 +315,7 @@ template<size_t DIM, typename T> struct _ArrayNodeProxy{
 		*isLeaf = v.isLeaf;
 		*childCount = v.childCount;
 		*childStart = v.childStart;
+		//printf("Node info copying to proxy: %lu %lu %lu %lu\n",v.childCount,*childCount,v.childStart,*childStart);
 		minX = v.minX;
 		maxX = v.maxX;
 		barycenter = v.barycenter;

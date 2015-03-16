@@ -444,6 +444,7 @@ int main(int argc, char* argv[]) {
 	allocGroupInfoArray(groups.size(), gia);
 	for(size_t i = 0; i < groups.size(); i++){
 		gia[i] = groups[i];
+		//printf("Group info copying to proxy(2): %lu %lu %lu %lu\n",*gia[i].childCount,groups[i].childCount,*gia[i].childStart,groups[i].childStart);
 	}
 	
 	ParticleArray<DIM, Float> pa;
@@ -465,6 +466,7 @@ int main(int argc, char* argv[]) {
 		allocNodeArray(node_counts[i], level);
 		for(size_t j = 0; j < node_counts[i]; j++){
 			level[j] = tree[i][j];
+			//printf("Node info copying to proxy(2): %lu %lu %lu %lu\n",*level[j].childCount,tree[i][j].childCount,*level[j].childStart,tree[i][j].childStart);
 		}
 		
 		treeA[i] = level;
