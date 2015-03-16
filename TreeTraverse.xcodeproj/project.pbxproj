@@ -36,6 +36,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E912E26D1AB6E93A0020ACCB /* CudaArrayCopyUtils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CudaArrayCopyUtils.h; sourceTree = SOURCE_ROOT; };
 		E9397DA01AB2A06C002AD86B /* TreeTraverse */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TreeTraverse; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9397DAA1AB2A0DB002AD86B /* makeplummer.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = makeplummer.py; sourceTree = SOURCE_ROOT; };
 		E9397DAB1AB2A0DB002AD86B /* treecode.cu */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = treecode.cu; sourceTree = SOURCE_ROOT; };
@@ -46,7 +47,7 @@
 		E9397DB21AB2A1D7002AD86B /* plummer10k.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer10k.dat; path = data/plummer10k.dat; sourceTree = "<group>"; };
 		E9397DB31AB2A1D7002AD86B /* plummer100.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer100.dat; path = data/plummer100.dat; sourceTree = "<group>"; };
 		E9397DB41AB2A1D7002AD86B /* plummer100k.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer100k.dat; path = data/plummer100k.dat; sourceTree = "<group>"; };
-		E966CD161AB6D70F00433ACD /* CudaArrayCopyUtils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = CudaArrayCopyUtils.h; path = ../CudaArrayCopyUtils.h; sourceTree = "<group>"; };
+		E966CD171AB6E8FD00433ACD /* TransposalTools.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TransposalTools.h; sourceTree = SOURCE_ROOT; };
 		E98A885D1AB2D3F400E64D76 /* Miniball.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Miniball.hpp; sourceTree = SOURCE_ROOT; };
 		E9E910171AB65DB200A0E4D6 /* treecode.cu.cpp.ii */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp.preprocessed; path = treecode.cu.cpp.ii; sourceTree = "<group>"; };
 		E9E9101B1AB6636700A0E4D6 /* treecodeCU.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = treecodeCU.h; sourceTree = SOURCE_ROOT; };
@@ -91,7 +92,7 @@
 		E9397DA21AB2A06C002AD86B /* TreeTraverse */ = {
 			isa = PBXGroup;
 			children = (
-				E966CD161AB6D70F00433ACD /* CudaArrayCopyUtils.h */,
+				E912E26D1AB6E93A0020ACCB /* CudaArrayCopyUtils.h */,
 				E9397DAA1AB2A0DB002AD86B /* makeplummer.py */,
 				E9397DAB1AB2A0DB002AD86B /* treecode.cu */,
 				E9397DAC1AB2A0DB002AD86B /* treedefs.h */,
@@ -99,6 +100,7 @@
 				E9397DAD1AB2A0DB002AD86B /* treetester.cpp */,
 				E9E9101B1AB6636700A0E4D6 /* treecodeCU.h */,
 				E9E910201AB6794800A0E4D6 /* cudahelper.h */,
+				E966CD171AB6E8FD00433ACD /* TransposalTools.h */,
 			);
 			path = TreeTraverse;
 			sourceTree = "<group>";

@@ -28,6 +28,12 @@ template<size_t DIM, typename T> struct Vec{
 		}
 	}
 	
+	UNIVERSAL_STORAGE Vec<DIM, T>(const T a[DIM]){
+		for(size_t i = 0; i < DIM; i++){
+			x[i] = a[i];
+		}
+	}
+	
 	UNIVERSAL_STORAGE inline Vec<DIM, T> operator -(const Vec<DIM, T> &v) const{
 		Vec<DIM, T> out;
 		for(size_t i = 0; i < DIM; i++){
@@ -353,6 +359,7 @@ template<size_t DIM, typename T> struct NodeArray{
 		t.minX = minX[i];
 		t.maxX = maxX[i];
 		t.barycenter = barycenter[i];
+		t.mass = &(mass[i]);
 		t.radius = &(radius[i]);
 		return t;
 	}
@@ -387,7 +394,7 @@ template<size_t DIM, typename T> struct _ArrayParticleProxy{
 	UNIVERSAL_STORAGE inline _ArrayParticleProxy<DIM, T>& operator=(const Particle<DIM, T> &v) {
 		pos = v.pos;
 		vel = v.vel;
-		*m = v.ma;
+		*m = v.m;
 		return *this;
 	}
 };

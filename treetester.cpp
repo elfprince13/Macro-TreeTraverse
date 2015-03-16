@@ -1,5 +1,6 @@
 #include "treedefs.h"
 #include "treecodeCU.h"
+#include "TransposalTools.h"
 #include <iostream>
 #include <limits>
 #include <vector>
@@ -41,8 +42,10 @@ template<size_t ORDER, typename Float> Float forward_euler(Vec<ORDER+1, Float> y
 template<size_t DIM, typename Float> void integrate_system(size_t n, Particle<DIM, Float> *particles, Vec<DIM, Float> const *forces, Float dt){
 	for(size_t i = 0; i < n; i++){
 		for(size_t j = 0; j < DIM; j++){
-			Vec<3, Float> posp = {.x = {particles[i].pos.x[j], particles[i].vel.x[j], forces[i].x[j] / particles[i].m}};
-			Vec<2, Float> velp = {.x = {particles[i].vel.x[j], forces[i].x[j] / particles[i].m}};
+			Float posA[3] = {particles[i].pos.x[j], particles[i].vel.x[j], forces[i].x[j] / particles[i].m};
+			Float velA[2] = {particles[i].vel.x[j], forces[i].x[j] / particles[i].m};
+			Vec<3, Float> posp(posA);
+			Vec<2, Float> velp(velA);
 			particles[i].pos.x[j] = forward_euler<2, Float>(posp, dt);
 			particles[i].vel.x[j] = forward_euler<1, Float>(velp, dt);	
 		}
@@ -420,7 +423,7 @@ int main(int argc, char* argv[]) {
 	std::vector<GroupInfo<DIM, Float, N_GROUP> > groups = groups_from_tree<DIM, MAX_LEVELS, N_GROUP>(tree, node_counts, bodiesSorted);
 	std::cout << "We have " << groups.size() << " groups " << std::endl;
 	
-	/*
+	//*
 	for(int i = 0; i < 10; i++){
 		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
 		integrate_system<DIM, Float>(nPs, bodiesSorted, forces, DT);
@@ -437,7 +440,44 @@ int main(int argc, char* argv[]) {
 	std::cout << "We have " << groups.size() << " groups " << std::endl;
 	
 	
-	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), groups.data(), 0, tree, node_counts, nPs, bodiesSorted, forces, SOFTENING, THETA, groups.size(), TPPB);
+	GroupInfoArray<DIM, Float, N_GROUP> gia;
+	allocGroupInfoArray(groups.size(), gia);
+	for(size_t i = 0; i < groups.size(); i++){
+		gia[i] = groups[i];
+	}
+	
+	ParticleArray<DIM, Float> pa;
+	allocParticleArray(nPs, pa);
+	for(size_t i = 0; i < nPs; i++){
+		pa[i] = bodiesSorted[i];
+	}
+	
+	VecArray<DIM, Float> va;
+	allocVecArray(nPs, va);
+	for(size_t i = 0; i < nPs; i++){
+		va[i] = forces[i];
+	}
+	
+	NodeArray<DIM, Float> treeA[MAX_LEVELS];
+	for(size_t i = 0; i < MAX_LEVELS; i++){
+		NodeArray<DIM, Float> level;
+		
+		allocNodeArray(node_counts[i], level);
+		for(size_t j = 0; j < node_counts[i]; j++){
+			level[j] = tree[i][j];
+		}
+		
+		treeA[i] = level;
+	}
+	
+	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 0, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
+	
+	freeGroupInfoArray(gia);
+	freeParticleArray(pa);
+	freeVecArray(va);
+	for(size_t i = 0; i < MAX_LEVELS; i++){
+		freeNodeArray(treeA[i]);
+	}
 	
 	delete_tree<DIM, MAX_LEVELS, Float>(tree);
 	

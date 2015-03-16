@@ -264,7 +264,7 @@ void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo,
 	
 	GroupInfoArray<DIM, Float, PPG> cuGroupInfo;
 	allocDeviceGroupInfoArray(nGroups, cuGroupInfo);
-	copyDeviceGroupInfoArray(nGroups, cuGroupInfo, groupInfo,  cudaMemcpyHostToDevice);
+	copyDeviceGroupInfoArray(nGroups, cuGroupInfo, groupInfo, cudaMemcpyHostToDevice);
 	
 	ParticleArray<DIM, Float> cuParticles;
 	allocDeviceParticleArray(n, cuParticles);

@@ -10,7 +10,6 @@
 #define TreeTraverse_CudaArrayCopyUtils_h
 
 #include "treedefs.h"
-#include "treecodeCU.h"
 #include "cudahelper.h"
 #include <iostream>
 
@@ -30,7 +29,9 @@ template<size_t DIM, typename Float> void allocDeviceVecArray(size_t width, VecA
 template<size_t DIM, typename Float> void copyDeviceVecArray(size_t width, const VecArray<DIM, Float>& dst, const VecArray<DIM, Float>& src, cudaMemcpyKind dir){
 	// We know how big the tree is now. Don't make extra space
 	size_t floatBytes = width*sizeof(Float);
+	//printf("copying array %lu with dir %d:\n",width,dir);
 	for(size_t j = 0; j < DIM; j++){
+		//printf("\t%p\t%p\n",dst.x[j],src.x[j]);
 		gpuErrchk( (cudaMemcpy(dst.x[j], src.x[j], floatBytes, dir)) );
 	}
 }
@@ -144,8 +145,8 @@ template<size_t DIM, typename Float> void copyDeviceParticleArray(size_t width, 
 	
 	// We know how big the tree is now. Don't make extra space
 	size_t floatBytes = width*sizeof(Float);
-	copyDeviceVecArray(width, src.pos, dst.pos, dir);
-	copyDeviceVecArray(width, src.vel, dst.vel, dir);
+	copyDeviceVecArray(width, dst.pos, src.pos, dir);
+	copyDeviceVecArray(width, dst.vel, src.vel, dir);
 	gpuErrchk( (cudaMemcpy(dst.m, src.m, floatBytes, dir)) );
 	
 }
@@ -186,9 +187,9 @@ template<size_t DIM, typename Float, size_t MAX_PARTS> void copyDeviceGroupInfoA
 	
 	
 	size_t floatBytes = width*sizeof(Float);
-	copyDeviceVecArray(width, src.minX, dst.minX, dir);
-	copyDeviceVecArray(width, src.maxX, dst.maxX, dir);
-	copyDeviceVecArray(width, src.center, dst.center, dir);
+	copyDeviceVecArray(width, dst.minX, src.minX, dir);
+	copyDeviceVecArray(width, dst.maxX, src.maxX, dir);
+	copyDeviceVecArray(width, dst.center, src.center, dir);
 	gpuErrchk( (cudaMemcpy(dst.radius, src.radius, floatBytes, dir)) );
 	
 }
