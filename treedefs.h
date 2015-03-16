@@ -92,11 +92,21 @@ template<size_t DIM, typename T> struct Vec{
 	}
 };
 
+template<size_t DIM, typename T> struct VecArray;
+
 template<size_t DIM, typename T> struct _ArrayVecProxy{
 	T* x[DIM];
-	UNIVERSAL_STORAGE inline _ArrayVecProxy<DIM, T>& operator=(const Vec<DIM, T> &v) {
+	
+	UNIVERSAL_STORAGE _ArrayVecProxy<DIM, T>(){}
+	UNIVERSAL_STORAGE _ArrayVecProxy<DIM, T>(VecArray<DIM, T>& v, size_t ofs) {
 		for(size_t i = 0; i < DIM; i++){
-			*(x[i]) = v.x[i];
+			x[i] = v.x[i] + ofs;
+		}
+	}
+	
+	UNIVERSAL_STORAGE inline _ArrayVecProxy<DIM, T>& operator=(const Vec<DIM, T>& v) {
+		for(size_t i = 0; i < DIM; i++){
+			*x[i] = v.x[i];
 		}
 		return *this;
 	}
@@ -105,6 +115,13 @@ template<size_t DIM, typename T> struct _ArrayVecProxy{
 
 template <size_t DIM, typename T> struct VecArray{
 	T *x[DIM];
+	
+	UNIVERSAL_STORAGE VecArray<DIM, T>(){}
+	UNIVERSAL_STORAGE VecArray<DIM, T>(Vec<DIM, T>& n){
+		for(size_t i = 0; i < DIM; i++){
+			x[i] = n.x+i;
+		}
+	}
 	
 	UNIVERSAL_STORAGE inline Vec<DIM, T> operator[](size_t i) const{
 		Vec<DIM, T> t;
@@ -116,10 +133,7 @@ template <size_t DIM, typename T> struct VecArray{
 	
 	
 	UNIVERSAL_STORAGE inline _ArrayVecProxy<DIM, T> operator[](size_t i) {
-		_ArrayVecProxy<DIM, T> t;
-		for(size_t j = 0; j < DIM; j++){
-			t.x[j] = &(x[j][i]);
-		}
+		_ArrayVecProxy<DIM, T> t(*this, i);
 		return t;
 	}
 	
@@ -209,6 +223,7 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfo{
 	T radius;
 };
 
+template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfoArray;
 template<size_t DIM, typename T, size_t MAX_PARTS> struct _ArrayGroupInfoProxy{
 	size_t *childCount;
 	size_t *childStart;
@@ -216,6 +231,16 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct _ArrayGroupInfoProxy{
 	_ArrayVecProxy<DIM, T> maxX;
 	_ArrayVecProxy<DIM, T> center;
 	T *radius;
+	
+	UNIVERSAL_STORAGE _ArrayGroupInfoProxy<DIM, T, MAX_PARTS>(){}
+	UNIVERSAL_STORAGE _ArrayGroupInfoProxy<DIM, T, MAX_PARTS>(GroupInfoArray<DIM, T, MAX_PARTS>& v, size_t ofs) {
+		childCount = v.childCount + ofs;
+		childStart = v.childStart + ofs;
+		minX = _ArrayVecProxy<DIM, T>(v.minX, ofs);
+		maxX = _ArrayVecProxy<DIM, T>(v.maxX, ofs);
+		center = _ArrayVecProxy<DIM, T>(v.center, ofs);
+		radius = v.radius + ofs;
+	}
 	
 	UNIVERSAL_STORAGE inline _ArrayGroupInfoProxy<DIM, T, MAX_PARTS>& operator=(const GroupInfo<DIM, T, MAX_PARTS> &v) {
 		*childCount = v.childCount;
@@ -252,13 +277,7 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfoArray{
 	
 	
 	UNIVERSAL_STORAGE inline _ArrayGroupInfoProxy<DIM, T, MAX_PARTS> operator [](size_t i) {
-		_ArrayGroupInfoProxy<DIM, T, MAX_PARTS> t;
-		t.childCount = &(childCount[i]);
-		t.childStart = &(childStart[i]);
-		t.minX = minX[i];
-		t.maxX = maxX[i];
-		t.center = center[i];
-		t.radius = &(radius[i]);
+		_ArrayGroupInfoProxy<DIM, T, MAX_PARTS> t(*this, i);
 		return t;
 	}
 	
@@ -340,6 +359,10 @@ template<size_t DIM, typename T> struct NodeArray{
 		isLeaf = &(n.isLeaf);
 		childCount = &(n.childCount);
 		childStart = &(n.childStart);
+		
+		minX = VecArray<DIM, T>(n.minX);
+		maxX = VecArray<DIM, T>(n.maxX);
+		barycenter = VecArray<DIM, T>(n.barycenter);
 		
 		mass = &(n.mass);
 		radius = &(n.radius);

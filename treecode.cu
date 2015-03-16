@@ -36,12 +36,8 @@ template<size_t DIM, typename Float> __device__ void initParticleStack(ParticleA
 		if(threadIdx.x == 0 && blockIdx.x == 0){
 			printf("%d Copied particle (%f) to (%f)\n", blockIdx.x, stack.m[threadIdx.x], level.m[threadIdx.x]);
 		}
-		for(size_t j = 0; j < DIM; j++){
-			stack.pos.x[j][threadIdx.x] = level.pos.x[j][threadIdx.x];
-		}
-		for(size_t j = 0; j < DIM; j++){
-			stack.vel.x[j][threadIdx.x] = level.vel.x[j][threadIdx.x];
-		}
+		stack.pos[threadIdx.x] = level.pos[threadIdx.x];
+		stack.vel[threadIdx.x] = level.vel[threadIdx.x];
 		stack.m[threadIdx.x] = level.m[threadIdx.x];
 	}
 	//*/
@@ -66,15 +62,9 @@ template<size_t DIM, typename Float> __device__ void initNodeStack(NodeArray<DIM
 		if(threadIdx.x == 0 && blockIdx.x == 0){
 			printf("%d Copied node (%lu %lu) to (%lu %lu)\n", blockIdx.x, stack.childCount[threadIdx.x], stack.childStart[threadIdx.x], level.childCount[threadIdx.x],level.childStart[threadIdx.x]);
 		}
-		for(size_t j = 0; j < DIM; j++){
-			stack.minX.x[j][threadIdx.x] = level.minX.x[j][threadIdx.x];
-		}
-		for(size_t j = 0; j < DIM; j++){
-			stack.maxX.x[j][threadIdx.x] = level.maxX.x[j][threadIdx.x];
-		}
-		for(size_t j = 0; j < DIM; j++){
-			stack.barycenter.x[j][threadIdx.x] = level.barycenter.x[j][threadIdx.x];
-		}
+		stack.minX[threadIdx.x] = level.minX[threadIdx.x];
+		stack.maxX[threadIdx.x] = level.maxX[threadIdx.x];
+		stack.barycenter[threadIdx.x] = level.barycenter[threadIdx.x];
 		stack.mass[threadIdx.x] = level.mass[threadIdx.x];
 		stack.radius[threadIdx.x] = level.radius[threadIdx.x];
 	}
@@ -87,48 +77,45 @@ template<size_t DIM, typename Float> __device__ void initNodeStack(NodeArray<DIM
 	//*/
 }
 
+template<size_t DIM, typename Float> __device__ void dumpStackChildren(NodeArray<DIM, Float> stack, const size_t* stackCt){
+	size_t dst = *stackCt;//atomicAdd((unsigned long long*)stackCt, (unsigned long long)0);
+	for(size_t i = 0; i < dst; i++){
+			printf("(%lu) see (%lu %lu) in (%p/%lu)\n",i,stack.childStart[i],stack.childCount[i], stackCt, dst);
+	}
+}
+
 template<size_t DIM, typename Float> __device__ void pushAllNodes(const NodeArray<DIM, Float> nodes, const size_t nodeCt, NodeArray<DIM, Float> stack, size_t* stackCt){
-	if(threadIdx.x == 0 && blockIdx.x == 0) printf("%d Pushing to stack %lu nodes at %p\n",blockIdx.x,nodeCt,stack.childCount);
+	if(blockIdx.x == 0) printf("%d Pushing to stack %lu nodes from %p to %p\n",blockIdx.x,nodeCt,nodes.childCount,stack.childCount);
 	
 	// This is a weird compiler bug. There's no reason this shouldn't have worked without the cast.
 	size_t dst = atomicAdd((unsigned long long*)stackCt, (unsigned long long)nodeCt);
-	for(size_t i = dst, j = 0; i < dst+ nodeCt; i++, j++){
+	for(size_t i = dst, j = 0; i < dst + nodeCt; i++, j++){
 		stack.isLeaf[i] = nodes.isLeaf[j];
 		stack.childCount[i] = nodes.childCount[j];
 		stack.childStart[i] = nodes.childStart[j];
 		if(blockIdx.x == 0){
-			printf("%d.%d Pushed node (%lu %lu) to (%lu %lu)\n",
-				   blockIdx.x,threadIdx.x, stack.childCount[i], stack.childStart[i], nodes.childCount[j],nodes.childStart[j]);
+			printf("%d.%d Pushed node (%lu %lu) to (%lu %lu) with (%lu,%lu)\n",
+				   blockIdx.x,threadIdx.x, stack.childCount[i], stack.childStart[i], nodes.childCount[j],nodes.childStart[j],i,j);
 		}
-		for(size_t k = 0; k < DIM; k++){
-			stack.minX.x[k][i] = nodes.minX.x[k][j];
-		}
-		for(size_t k = 0; j < DIM; j++){
-			stack.maxX.x[k][i] = nodes.maxX.x[k][j];
-		}
-		for(size_t k = 0; j < DIM; j++){
-			stack.barycenter.x[k][i] = nodes.barycenter.x[k][j];
-		}
+		stack.minX[i] = nodes.minX[j];
+		stack.maxX[i] = nodes.maxX[j];
+		stack.barycenter[i] = nodes.barycenter[j];
 		stack.mass[i] = nodes.mass[j];
 		stack.radius[i] = nodes.radius[j];
 	}
 }
 
 template<size_t DIM, typename Float> __device__ void pushAllParticles(const ParticleArray<DIM, Float> nodes, const size_t nodeCt, ParticleArray<DIM, Float> stack, size_t* stackCt){
-	if(threadIdx.x == 0 && blockIdx.x == 0) printf("%d Pushing to stack %lu particles at %p\n",blockIdx.x,nodeCt,stack.m);
+	if(threadIdx.x == 0 && blockIdx.x == 0) printf("%d Pushing to stack %lu particles from %p to %p\n",blockIdx.x,nodeCt,nodes.m,stack.m);
 	
 	// This is a weird compiler bug. There's no reason this shouldn't have worked without the cast.
 	size_t dst = atomicAdd((unsigned long long*)stackCt, (unsigned long long)nodeCt);
 	for(size_t i = dst, j = 0; i < dst+ nodeCt; i++, j++){
 		if(blockIdx.x == 0){
-			printf("%d Pushing particle (%f) to (%f)\n", blockIdx.x, stack.m[i], nodes.m[j]);
+			printf("%d.%d Pushing particle (%f) to (%f) with (%lu,%lu)\n", blockIdx.x,threadIdx.x, stack.m[i], nodes.m[j],i,j);
 		}
-		for(size_t k = 0; k < DIM; k++){
-			stack.pos.x[k][i] = nodes.pos.x[k][j];
-		}
-		for(size_t k = 0; j < DIM; j++){
-			stack.vel.x[k][i] = nodes.vel.x[k][j];
-		}
+		stack.pos[i] = nodes.pos[j];
+		stack.vel[i] = nodes.vel[j];
 		
 		stack.m[i] = nodes.m[j];
 	}
@@ -157,9 +144,57 @@ template<typename T> __device__ inline void swap(T& a, T& b){
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
 __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DIM, Float, PPG> groupInfo,
 								   const size_t startDepth, NodeArray<DIM, Float>* treeLevels, const size_t* treeCounts,
-								   const ParticleArray<DIM, Float> particles, const InteractionTypeArray<DIM, Float, Mode> interactions,
+								   const size_t n, const ParticleArray<DIM, Float> particles, const InteractionTypeArray<DIM, Float, Mode> interactions,
 								   const Float softening, const Float theta,
 								   size_t *bfsStackCounters, NodeArray<DIM, Float> bfsStackBuffers, const size_t stackCapacity) {
+	
+	if(blockIdx.x == 0 && threadIdx.x == 0){
+		printf("Validating %lu groups @ (%p %p)\n", nGroups, groupInfo.childStart, groupInfo.childCount);
+		for(size_t i = 0; i < nGroups; i++){
+			printf("\t(%lu %lu)",groupInfo.childStart[i], groupInfo.childCount[i]);
+		} printf("\n\n");
+		printf("Validating tree\n");
+		for(size_t i = 0; i < MAX_LEVELS; i++){
+			printf("Layer %lu: has %lu @ (%p %p %p)\n", i, treeCounts[i], treeLevels[i].childStart, treeLevels[i].childCount, treeLevels[i].isLeaf);
+			for(size_t j = 0; j < treeCounts[i]; j++){
+				printf("\t(%lu %lu %d)",treeLevels[i].childStart[j], treeLevels[i].childCount[j], treeLevels[i].isLeaf[j]);
+			} printf("\n\n");
+		} printf("\n");
+	}
+	
+	/*
+	__threadfence();
+	__syncthreads();
+	if(blockIdx.x == 0 && threadIdx.x == 0){
+	
+		printf("Validating particles\n");
+		printf("%p ",particles.m);
+		for(size_t j = 0; j < DIM; j++){
+			printf("%p ", particles.pos.x[j]);
+		}
+		for(size_t j = 0; j < DIM; j++){
+			printf("%p ", particles.vel.x[j]);
+		} printf("\n(");
+		for(size_t i = 0; i < n; i++){
+			printf("(%f ",particles.m[i]);
+			for(size_t j = 0; j < DIM; j++){
+				printf("%f ", particles.pos[i].x[j]);
+			}
+			for(size_t j = 0; j < DIM; j++){
+				printf("%f ", particles.vel[i].x[j]);
+			} printf(")\t");
+		}printf("\n\n");
+	
+	}
+	 //*/
+	
+	__threadfence();
+	__syncthreads();
+	
+	if(blockIdx.x == 0 && threadIdx.x == 0) dumpStackChildren(treeLevels[1], treeCounts+1);
+	__threadfence_block();
+	__syncthreads();
+	
 	
 	__shared__ size_t interactionCounters[2];
 	__shared__ Float particleMass[2*INTERACTION_THRESHOLD];
@@ -176,6 +211,14 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 	__shared__ Float nodeRadius[2*INTERACTION_THRESHOLD];
 	
 	
+	if(threadIdx.x == 0 && blockIdx.x == 0){
+		printf("%p %p %p %p\n",interactionCounters, particleMass, particlePos, particleVel);
+		printf("%p %p %p\n", nodeLeaves, nodeChildCount, nodeChildStart);
+		printf("%p %p %p\n", nodeMinX, nodeMaxX, nodeBarycenter);
+		printf("%p %p\n", nodeMass, nodeRadius);
+	}
+	
+	
 	ParticleArray<DIM, Float> particleInteractionList;
 	particleInteractionList.m = particleMass;
 	for(size_t j = 0; j < DIM; j++){
@@ -183,6 +226,16 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 	}
 	for(size_t j = 0; j < DIM; j++){
 		particleInteractionList.vel.x[j] = particleVel + (j * 2 * INTERACTION_THRESHOLD);
+	}
+	
+	if(threadIdx.x == 0 && blockIdx.x == 0){
+		printf("%p\n",particleInteractionList.m);
+		for(size_t j = 0; j < DIM; j++){
+			printf("%p ", particleInteractionList.pos.x[j]);
+		} printf("\n");
+		for(size_t j = 0; j < DIM; j++){
+			printf("%p ", particleInteractionList.vel.x[j]);
+		} printf("\n");
 	}
 	
 	
@@ -202,6 +255,21 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 	nodeInteractionList.mass = nodeMass;
 	nodeInteractionList.radius = nodeRadius;
 	
+
+	if(threadIdx.x == 0 && blockIdx.x == 0){
+		printf("%p %p %p\n",nodeInteractionList.isLeaf, nodeInteractionList.childCount, nodeInteractionList.childStart);
+		for(size_t j = 0; j < DIM; j++){
+			printf("%p ", nodeInteractionList.minX.x[j]);
+		} printf("\n");
+		for(size_t j = 0; j < DIM; j++){
+			printf("%p ", nodeInteractionList.maxX.x[j]);
+		} printf("\n");
+		for(size_t j = 0; j < DIM; j++){
+			printf("%p ", nodeInteractionList.barycenter.x[j]);
+		} printf("\n");
+		printf("%p %p\n",nodeInteractionList.mass, nodeInteractionList.radius);
+	}
+	
 	
 	if(blockIdx.x >= nGroups) return; // This probably shouldn't happen?
 	else {
@@ -213,15 +281,58 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 		ParticleArray<DIM, Float> pGList = particleInteractionList;
 		ParticleArray<DIM, Float> dummyP;
 		initParticleStack(dummyP, 0, pGList, pGLCt, 2 * INTERACTION_THRESHOLD);
+		__threadfence_block();
+		
+		if(threadIdx.x == 0 && blockIdx.x == 0){
+			printf("%p %p\n",pGLCt, pGList.m);
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", pGList.pos.x[j]);
+			} printf("\n");
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", pGList.vel.x[j]);
+			} printf("\n");
+		}
+
+
 		
 		
 		size_t* nGLCt = interactionCounters + 1;
 		NodeArray<DIM, Float> nGList = nodeInteractionList;
 		NodeArray<DIM, Float> dummyN;
 		initNodeStack(dummyN, 0, nGList, nGLCt, 2 * INTERACTION_THRESHOLD);
+		__threadfence_block();
+		
+		if(threadIdx.x == 0 && blockIdx.x == 0){
+			printf("%p %p %p %p\n",nGLCt, nGList.isLeaf, nGList.childCount, nGList.childStart);
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", nGList.minX.x[j]);
+			} printf("\n");
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", nGList.maxX.x[j]);
+			} printf("\n");
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", nGList.barycenter.x[j]);
+			} printf("\n");
+			printf("%p %p\n",nGList.mass, nGList.radius);
+		}
 		
 		size_t* cLCt = bfsStackCounters + 2 * blockIdx.x;
 		NodeArray<DIM, Float> currentLevel = bfsStackBuffers + 2 * blockIdx.x * stackCapacity;
+		__threadfence_block();
+		if(threadIdx.x == 0 && blockIdx.x == 0){
+			printf("%p %p %p %p\n",cLCt, currentLevel.isLeaf, currentLevel.childCount, currentLevel.childStart);
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", currentLevel.minX.x[j]);
+			} printf("\n");
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", currentLevel.maxX.x[j]);
+			} printf("\n");
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", currentLevel.barycenter.x[j]);
+			} printf("\n");
+			printf("%p %p\n",currentLevel.mass, currentLevel.radius);
+		}
+		
 		
 		if(threadIdx.x == 0 && blockIdx.x == 0){
 			printf("%d initing stack: %lu \n", blockIdx.x, startDepth);
@@ -232,9 +343,27 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 		initNodeStack(treeLevels[startDepth], treeCounts[startDepth], currentLevel, cLCt, stackCapacity);
 		
 		
+		if(blockIdx.x == 0 && threadIdx.x == 0)dumpStackChildren(currentLevel, cLCt);
+		__threadfence_block();
+		__syncthreads();
+		
 		size_t* nLCt = bfsStackCounters + 2 * blockIdx.x + 1;
 		NodeArray<DIM, Float> nextLevel = bfsStackBuffers + (2 * blockIdx.x + 1) * stackCapacity;
+		if(threadIdx.x == 0 && blockIdx.x == 0){
+			printf("%p %p %p %p\n",nLCt, nextLevel.isLeaf, nextLevel.childCount, nextLevel.childStart);
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", nextLevel.minX.x[j]);
+			} printf("\n");
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", nextLevel.maxX.x[j]);
+			} printf("\n");
+			for(size_t j = 0; j < DIM; j++){
+				printf("%p ", nextLevel.barycenter.x[j]);
+			} printf("\n");
+			printf("%p %p\n",nextLevel.mass, nextLevel.radius);
+		}
 		
+			
 		__syncthreads();
 		if(threadIdx.x == 0 && blockIdx.x == 0){
 			printf("%d post init stack: %lu \n", blockIdx.x, startDepth);
@@ -242,6 +371,7 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 			printf("%d contains: %lu %lu\n",blockIdx.x,currentLevel.childCount[0], currentLevel.childStart[0]);
 			//treeLevels[startDepth].childCount[0], treeLevels[startDepth].childStart[0]
 		}
+		__syncthreads();
 		
 		
 		
@@ -250,14 +380,43 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 			particle = particles[tgInfo.childStart + (threadIdx.x % tgInfo.childCount)];
 		}
 		
-		
 		InteractionType<DIM, Float, Mode> interaction = freshInteraction<DIM, Float, Mode>();
 		size_t curDepth = startDepth;
-		
-		
 		while(*cLCt != 0 ){//&& curDepth < MAX_LEVELS){ // Second condition shouldn't matter....
+			if(threadIdx.x == 0 && blockIdx.x == 0)printf("Entering the land of disturbing loops\n");
 			if(threadIdx.x == 0){
 				*nLCt = 0;
+			}
+			if(blockIdx.x == 0 && threadIdx.x == 0) dumpStackChildren(currentLevel, cLCt);
+			__threadfence_block();
+			__syncthreads();
+			if(blockIdx.x == 0 && threadIdx.x == 0)dumpStackChildren(nextLevel, nLCt);
+			__threadfence_block();
+			__syncthreads();
+			
+			if(threadIdx.x == 0 && blockIdx.x == 0){
+				printf("%p %p %p %p\n",cLCt, currentLevel.isLeaf, currentLevel.childCount, currentLevel.childStart);
+				for(size_t j = 0; j < DIM; j++){
+					printf("%p ", currentLevel.minX.x[j]);
+				} printf("\n");
+				for(size_t j = 0; j < DIM; j++){
+					printf("%p ", currentLevel.maxX.x[j]);
+				} printf("\n");
+				for(size_t j = 0; j < DIM; j++){
+					printf("%p ", currentLevel.barycenter.x[j]);
+				} printf("\n");
+				printf("%p %p\n",currentLevel.mass, currentLevel.radius);
+				printf("%p %p %p %p\n",nLCt, nextLevel.isLeaf, nextLevel.childCount, nextLevel.childStart);
+				for(size_t j = 0; j < DIM; j++){
+					printf("%p ", nextLevel.minX.x[j]);
+				} printf("\n");
+				for(size_t j = 0; j < DIM; j++){
+					printf("%p ", nextLevel.maxX.x[j]);
+				} printf("\n");
+				for(size_t j = 0; j < DIM; j++){
+					printf("%p ", nextLevel.barycenter.x[j]);
+				} printf("\n");
+				printf("%p %p\n",nextLevel.mass, nextLevel.radius);
 			}
 			
 			__threadfence_block();
@@ -265,22 +424,30 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 			
 			ptrdiff_t startOfs = *cLCt;
 			while(startOfs > 0){
+				if(threadIdx.x == 0 && blockIdx.x == 0) printf("\tEntering the inner crazy loop\n");
 				ptrdiff_t toGrab = startOfs - blockDim.x + threadIdx.x;
 				if(toGrab >= 0){
 					Node<DIM, Float> nodeHere = currentLevel[toGrab];
-					if(threadIdx.x == 0 &&
+					if(toGrab == 0 &&
 					   blockIdx.x == 0){
 						printf("%d.%d @ %lu:\t%lu %lu vs %lu %lu with %lu %ld \n", blockIdx.x, threadIdx.x, curDepth, nodeHere.childStart, nodeHere.childCount, currentLevel.childStart[toGrab], currentLevel.childCount[toGrab], *cLCt, toGrab);
 					}
 					//*
 					if(passesMAC(tgInfo, nodeHere, theta)){
+						if(blockIdx.x == 0) printf("\t%d accepted MAC\n",threadIdx.x);
 						if(INTERACTION_THRESHOLD > 0){
 							// Store to C/G list
-							pushAllNodes(NodeArray<DIM, Float>(nodeHere), 1, nGList, nGLCt);
+							if(blockIdx.x == 0) printf("\t%d found the following:\n\t(%lu %lu) @ (%p/%lu), writing to stack at pos %lu @ %p\n", threadIdx.x, nodeHere.childStart, nodeHere.childCount, treeLevels[curDepth + 1].childStart, curDepth + 1, *nLCt,nLCt);
+							
+							NodeArray<DIM, Float> tmpArray(nodeHere);
+							size_t tmpCt = 1;
+							
+							pushAllNodes(tmpArray, tmpCt, nGList, nGLCt);
 						} else if(threadIdx.x < tgInfo.childCount){
 							//interaction = interaction + calc_force(particle.m, particle.pos, nodeHere.mass, nodeHere.barycenter, softening);
 						}
 					} else {
+						if(blockIdx.x == 0) printf("\t%d rejected MAC\n",threadIdx.x);
 						if(nodeHere.isLeaf){
 							if(INTERACTION_THRESHOLD > 0){
 								// Store to P/G list
@@ -297,7 +464,18 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 							}
 						} else {
 							//if(curDepth + 1 < MAX_LEVELS && nodeHere.childStart < treeCounts[curDepth + 1]){
+							if(blockIdx.x == 0) printf("\t%d found the following:\n\t(%lu %lu) @ (%p/%lu), writing to stack at pos %lu @ %p\n", threadIdx.x, nodeHere.childStart, nodeHere.childCount, treeLevels[curDepth + 1].childStart, curDepth + 1, *nLCt,nLCt);
+							
+							
+							if(blockIdx.x == 0)dumpStackChildren(treeLevels[curDepth+1], treeCounts+curDepth+1);
+							if(blockIdx.x == 0)dumpStackChildren(nextLevel, nLCt);
+							
+							
 							pushAllNodes(treeLevels[curDepth + 1] + nodeHere.childStart, nodeHere.childCount, nextLevel, nLCt);
+							__threadfence_block();
+							if(blockIdx.x == 0)dumpStackChildren(treeLevels[curDepth+1], treeCounts+curDepth+1);
+							if(blockIdx.x == 0)dumpStackChildren(nextLevel, nLCt);
+							
 							//}
 						}
 					}
@@ -305,7 +483,35 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 				}
 				__threadfence_block();
 				__syncthreads();
-				//*
+				
+				
+				if(threadIdx.x == 0 && blockIdx.x == 0){
+					printf("%p %p %p %p\n",cLCt, currentLevel.isLeaf, currentLevel.childCount, currentLevel.childStart);
+					for(size_t j = 0; j < DIM; j++){
+						printf("%p ", currentLevel.minX.x[j]);
+					} printf("\n");
+					for(size_t j = 0; j < DIM; j++){
+						printf("%p ", currentLevel.maxX.x[j]);
+					} printf("\n");
+					for(size_t j = 0; j < DIM; j++){
+						printf("%p ", currentLevel.barycenter.x[j]);
+					} printf("\n");
+					printf("%p %p\n",currentLevel.mass, currentLevel.radius);
+					printf("%p %p %p %p\n",nLCt, nextLevel.isLeaf, nextLevel.childCount, nextLevel.childStart);
+					for(size_t j = 0; j < DIM; j++){
+						printf("%p ", nextLevel.minX.x[j]);
+					} printf("\n");
+					for(size_t j = 0; j < DIM; j++){
+						printf("%p ", nextLevel.maxX.x[j]);
+					} printf("\n");
+					for(size_t j = 0; j < DIM; j++){
+						printf("%p ", nextLevel.barycenter.x[j]);
+					} printf("\n");
+					printf("%p %p\n",nextLevel.mass, nextLevel.radius);
+				}
+				
+				
+				/*
 				if(INTERACTION_THRESHOLD > 0){ // Can't diverge, compile-time constant
 					ptrdiff_t innerStartOfs;
 					for(innerStartOfs = *nGLCt; innerStartOfs >= INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
@@ -340,13 +546,14 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 				
 				
 				startOfs -= blockDim.x;
+				
+				
 			}
 			
-			if(threadIdx.x == 0 && blockIdx.x == 0)printf("Done inside\n");
+			if(threadIdx.x == 0 && blockIdx.x == 0) printf("Done inside: %lu work remaining\n",*nLCt);
 			
 			swap<NodeArray<DIM, Float>>(currentLevel, nextLevel);
 			swap<size_t*>(cLCt, nLCt);
-			//printf("%lu and %lu swapped to %lu and %lu\n",oldC, oldN, *cLCt, *nLCt);
 			curDepth += 1;
 		}
 		
@@ -404,7 +611,7 @@ void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo,
 	dim3 dimBlock(threadCt);
 	std::cout << "Trying to launch with " << threadCt << " / block with " << blockCt << " blocks" << std::endl;
 	
-	traverseTreeKernel<DIM, Float, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<dimGrid, dimBlock>>>(nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
+	traverseTreeKernel<DIM, Float, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<dimGrid, dimBlock>>>(nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, n, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
 	

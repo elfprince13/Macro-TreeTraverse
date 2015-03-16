@@ -423,7 +423,7 @@ int main(int argc, char* argv[]) {
 	std::vector<GroupInfo<DIM, Float, N_GROUP> > groups = groups_from_tree<DIM, MAX_LEVELS, N_GROUP>(tree, node_counts, bodiesSorted);
 	std::cout << "We have " << groups.size() << " groups " << std::endl;
 	
-	//*
+	/*
 	for(int i = 0; i < 10; i++){
 		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
 		integrate_system<DIM, Float>(nPs, bodiesSorted, forces, DT);
