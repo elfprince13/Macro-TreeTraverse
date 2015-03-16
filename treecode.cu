@@ -52,7 +52,7 @@ template<typename T> __device__ inline void swap(T& a, T& b){
 
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
 __global__ void traverseTreeKernel(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t startDepth,
-							 Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions, Float softening, Float theta, unsigned char *bfsStackBuffers, const size_t stackCapacity) {
+							 Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], Particle<DIM, Float>* particles, InteractionType<DIM, Float, Mode>* interactions, Float softening, Float theta, unsigned char *bfsStackBuffers, const size_t stackCapacity) {
 	__shared__ unsigned char smem[2 * sizeof(size_t) + 2 * INTERACTION_THRESHOLD * (sizeof(Node<DIM, Float>) + sizeof(Particle<DIM, Float>))];
 	size_t* pGLCt = (size_t*)smem;
 	Particle<DIM, Float>* pGList = (Particle<DIM, Float>*)(smem + sizeof(size_t));
@@ -124,7 +124,7 @@ __global__ void traverseTreeKernel(size_t nGroups, GroupInfo<DIM, Float, PPG>* g
 					}
 					__syncthreads();
 					if(INTERACTION_THRESHOLD > 0){ // Can't diverge, compile-time constant
-						size_t innerStartOfs;
+						ptrdiff_t innerStartOfs;
 						for(innerStartOfs = *nGLCt; innerStartOfs >= INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
 							ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
 							if(toGrab >= 0){
@@ -132,14 +132,21 @@ __global__ void traverseTreeKernel(size_t nGroups, GroupInfo<DIM, Float, PPG>* g
 							}
 						}
 						// Need to update stack pointer
+						if(threadIdx.x == 0){
+							*nGLCt = (innerStartOfs < 0) ? 0 : innerStartOfs;
+						}
 						
-						for(innerStartOfs = *nGLCt; innerStartOfs >= INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
+						for(innerStartOfs = *pGLCt; innerStartOfs >= INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
 							ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
 							if(toGrab >= 0){
 								interaction = interaction + calc_force(particle.m, particle.pos, pGList[toGrab].m, pGList[toGrab].pos, softening);
 							}
 						}
 						// Need to update stack pointer
+						// Need to update stack pointer
+						if(threadIdx.x == 0){
+							*pGLCt = (innerStartOfs < 0) ? 0 : innerStartOfs;
+						}
 
 						
 					}
@@ -159,21 +166,53 @@ __global__ void traverseTreeKernel(size_t nGroups, GroupInfo<DIM, Float, PPG>* g
 	
 }
 
+template<size_t DIM, typename Float, size_t MAX_LEVELS>
+Node<DIM, Float>** makeDeviceTree(Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS]){
+	Node<DIM, Float>** tree;
+	Node<DIM, Float>* placeHolderTree[MAX_LEVELS];
+	gpuErrchk( (cudaMalloc(&tree, MAX_LEVELS*sizeof(Node<DIM, Float>*))) );
+	for(size_t i = 0; i < MAX_LEVELS; i++){
+		Node<DIM, Float>* level;
+		gpuErrchk( (cudaMalloc(&level, treeCounts[i]*sizeof(Node<DIM, Float>)) )); // We know how big the tree is now. Don't make extra space
+		gpuErrchk( (cudaMemcpy(level, treeLevels[i], treeCounts[i]*sizeof(Node<DIM, Float>), cudaMemcpyHostToDevice)) );
+		placeHolderTree[i] = level;
+	}
+	gpuErrchk( (cudaMemcpy(tree, placeHolderTree, sizeof(Node<DIM, Float>*), cudaMemcpyHostToDevice)) );
+	return tree;
+}
 
+
+// Something is badly wrong with template resolution if we switch to InteractionType here.
+// I think the compilers are doing name-mangling differently or something
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
 void traverseTreeCUDA(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t startDepth,
-				  Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions, Float softening, Float theta, size_t blockCt, size_t threadCt){
+				  Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], size_t n, Particle<DIM, Float>* particles, Vec<DIM, Float>* interactions, Float softening, Float theta, size_t blockCt, size_t threadCt){
 	
 	unsigned char *bfsStackBuffers;
 	const size_t stackCapacity = 0;
 	
-	traverseTreeKernel<DIM, Float, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<blockCt, threadCt>>>(nGroups, groupInfo, startDepth, treeLevels, treeCounts, particles, interactions, softening, theta, bfsStackBuffers, stackCapacity);
+	
+	GroupInfo<DIM, Float, PPG>* cuGroupInfo;
+	
+	Node<DIM, Float>** cuTreeLevels = makeDeviceTree<DIM, Float, MAX_LEVELS>(treeLevels, treeCounts);
+	size_t* cuTreeCounts;
+	gpuErrchk( (cudaMalloc(&cuTreeCounts, MAX_LEVELS * sizeof(size_t))) );
+	gpuErrchk( (cudaMemcpy(cuTreeCounts, treeCounts, MAX_LEVELS * sizeof(size_t), cudaMemcpyHostToDevice)) );
+	
+	Particle<DIM, Float>* cuParticles;
+	gpuErrchk( (cudaMalloc(&cuParticles, n * sizeof(Particle<DIM, Float>))) );
+	gpuErrchk( (cudaMemcpy(cuParticles, particles, n * sizeof(Particle<DIM, Float>), cudaMemcpyHostToDevice)) );
+	InteractionType<DIM, Float, Mode>* cuInteractions;
+	gpuErrchk( (cudaMalloc(&cuInteractions, n * sizeof(InteractionType<DIM, Float, Mode>))) );
+	gpuErrchk( (cudaMemcpy(cuInteractions, interactions, n * sizeof(InteractionType<DIM, Float, Mode>), cudaMemcpyHostToDevice)) );
+	
+	traverseTreeKernel<DIM, Float, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<blockCt, threadCt>>>(nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, cuParticles, cuInteractions, softening, theta, bfsStackBuffers, stackCapacity);
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
 	
 	
 }
 
-template void traverseTreeCUDA<3, float, 16, 8, 8, Forces>(size_t, GroupInfo<3, float, 16> *, size_t, Node<3, float> **, size_t *, Particle<3, float> *, Vec<3, float> *, float, float, size_t, size_t);
+template void traverseTreeCUDA<3, float, 16, 8, 8, Forces>(size_t, GroupInfo<3, float, 16> *, size_t, Node<3, float> **, size_t *, size_t, Particle<3, float> *, InteractionType<3, float, Forces> *, float, float, size_t, size_t);
 
 

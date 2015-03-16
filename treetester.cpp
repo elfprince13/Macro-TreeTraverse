@@ -371,7 +371,7 @@ int main(int argc, char* argv[]) {
 	int nPs = atoi(argv[1]);
 	Particle<DIM,Float> *bodies = new Particle<DIM,Float>[nPs] ;
 	Particle<DIM,Float> *bodiesSorted = new Particle<DIM,Float>[nPs] ;
-	Vec<DIM,Float> *forces = new Vec<DIM,Float>[nPs];
+	InteractionType<DIM,Float,Forces> *forces = new InteractionType<DIM,Float,Forces>[nPs];
 	FILE *f = fopen(argv[2],"rb");
 	for(size_t i = 0; i < nPs; i++){
 		bodies[i].m = readFloat<Float>(f);
@@ -415,7 +415,7 @@ int main(int argc, char* argv[]) {
 	
 	std::vector<GroupInfo<DIM, Float, N_GROUP> > groups = groups_from_tree<DIM, MAX_LEVELS, N_GROUP>(tree, node_counts, bodiesSorted);
 	
-	
+	//*
 	for(int i = 0; i < 10; i++){
 		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
 		integrate_system<DIM, Float>(nPs, bodiesSorted, forces, DT);
@@ -425,12 +425,13 @@ int main(int argc, char* argv[]) {
 		clear_node_counts<MAX_LEVELS>(node_counts);
 		std::swap(bodies, bodiesSorted);
 		insert_all<DIM, MAX_LEVELS, NODE_THRESHOLD>(nPs, bodies, bodiesSorted, tree, node_counts);
+		groups = groups_from_tree<DIM, MAX_LEVELS, N_GROUP>(tree, node_counts, bodiesSorted);
 		
 	}
+	 //*/
 	
 	
-	
-	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA, groups.size(), TPPB);
+	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), groups.data(), 0, tree, node_counts, nPs, bodiesSorted, forces, SOFTENING, THETA, groups.size(), TPPB);
 	
 	delete_tree<DIM, MAX_LEVELS, Float>(tree);
 	
