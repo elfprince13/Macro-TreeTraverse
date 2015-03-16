@@ -204,10 +204,14 @@ template<size_t DIM, size_t MAX_LEVELS, size_t N_GROUP, typename Float>
 std::vector<GroupInfo<DIM, Float, N_GROUP> > groups_from_tree(Node<DIM, Float>* tree[MAX_LEVELS], size_t node_counts[MAX_LEVELS], const Particle<DIM, Float> *particles){
 	std::vector<GroupInfo<DIM, Float, N_GROUP> > groups;
 	groups.clear();
+	//std::cout << "collecting groups:" << std::endl;
 	for(size_t level = 0; level < MAX_LEVELS; level++){
+		//std::cout << "\t"<< level << std::endl;
 		for(size_t node = 0; node < node_counts[level]; node++){
+			//std::cout << "\t\t"<< node <<std::endl;
 			// We probably don't want to load balance groups because under-full groups can ante-up per-particles
-			for(size_t i = 0; i + N_GROUP < tree[level][node].childCount; i += N_GROUP){
+			for(size_t i = 0; i < tree[level][node].childCount; i += N_GROUP){
+				//std::cout << "\t\t\t" << i << std::endl;
 				GroupInfo<DIM, Float, N_GROUP> group;
 				group.childStart = tree[level][node].childStart + i;
 				group.childCount = (i < tree[level][node].childCount) ? N_GROUP : (tree[level][node].childCount % N_GROUP);
@@ -414,8 +418,9 @@ int main(int argc, char* argv[]) {
 	std::cout << "Total in leaves:\t" << validateCt << "\tvs\t" << nPs << "\tto start "<< std::endl;
 	
 	std::vector<GroupInfo<DIM, Float, N_GROUP> > groups = groups_from_tree<DIM, MAX_LEVELS, N_GROUP>(tree, node_counts, bodiesSorted);
+	std::cout << "We have " << groups.size() << " groups " << std::endl;
 	
-	//*
+	/*
 	for(int i = 0; i < 10; i++){
 		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
 		integrate_system<DIM, Float>(nPs, bodiesSorted, forces, DT);
@@ -429,6 +434,7 @@ int main(int argc, char* argv[]) {
 		
 	}
 	 //*/
+	std::cout << "We have " << groups.size() << " groups " << std::endl;
 	
 	
 	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), groups.data(), 0, tree, node_counts, nPs, bodiesSorted, forces, SOFTENING, THETA, groups.size(), TPPB);
