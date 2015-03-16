@@ -8,7 +8,18 @@
 
 /* Begin PBXBuildFile section */
 		E9397DAE1AB2A0DB002AD86B /* treetester.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E9397DAD1AB2A0DB002AD86B /* treetester.cpp */; };
+		E9E910181AB65DB200A0E4D6 /* treecode.cu.cpp.ii in Sources */ = {isa = PBXBuildFile; fileRef = E9E910171AB65DB200A0E4D6 /* treecode.cu.cpp.ii */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E9E910191AB65DE800A0E4D6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E9397D981AB2A06C002AD86B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E9E910131AB65D3000A0E4D6;
+			remoteInfo = "TreeTraverse-CUDA";
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		E9397D9E1AB2A06C002AD86B /* CopyFiles */ = {
@@ -34,6 +45,7 @@
 		E9397DB31AB2A1D7002AD86B /* plummer100.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer100.dat; path = data/plummer100.dat; sourceTree = "<group>"; };
 		E9397DB41AB2A1D7002AD86B /* plummer100k.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = plummer100k.dat; path = data/plummer100k.dat; sourceTree = "<group>"; };
 		E98A885D1AB2D3F400E64D76 /* Miniball.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Miniball.hpp; sourceTree = SOURCE_ROOT; };
+		E9E910171AB65DB200A0E4D6 /* treecode.cu.cpp.ii */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp.preprocessed; path = treecode.cu.cpp.ii; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +65,7 @@
 				E9397DAF1AB2A1C8002AD86B /* Data */,
 				E9397DA21AB2A06C002AD86B /* TreeTraverse */,
 				E9397DA11AB2A06C002AD86B /* Products */,
+				E9E910171AB65DB200A0E4D6 /* treecode.cu.cpp.ii */,
 			);
 			sourceTree = "<group>";
 		};
@@ -90,6 +103,23 @@
 		};
 /* End PBXGroup section */
 
+/* Begin PBXLegacyTarget section */
+		E9E910131AB65D3000A0E4D6 /* TreeTraverse-CUDA */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "-std=c++11 -v -cuda treecode.cu";
+			buildConfigurationList = E9E910141AB65D3000A0E4D6 /* Build configuration list for PBXLegacyTarget "TreeTraverse-CUDA" */;
+			buildPhases = (
+			);
+			buildToolPath = "/Developer/NVIDIA/CUDA-7.0/bin/nvcc";
+			buildWorkingDirectory = /Users/thomas/Documents/Brown/Proteins/TreeTraverse;
+			dependencies = (
+			);
+			name = "TreeTraverse-CUDA";
+			passBuildSettingsInEnvironment = 0;
+			productName = "TreeTraverse-CUDA";
+		};
+/* End PBXLegacyTarget section */
+
 /* Begin PBXNativeTarget section */
 		E9397D9F1AB2A06C002AD86B /* TreeTraverse */ = {
 			isa = PBXNativeTarget;
@@ -102,6 +132,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				E9E9101A1AB65DE800A0E4D6 /* PBXTargetDependency */,
 			);
 			name = TreeTraverse;
 			productName = TreeTraverse;
@@ -120,6 +151,9 @@
 					E9397D9F1AB2A06C002AD86B = {
 						CreatedOnToolsVersion = 6.2;
 					};
+					E9E910131AB65D3000A0E4D6 = {
+						CreatedOnToolsVersion = 6.2;
+					};
 				};
 			};
 			buildConfigurationList = E9397D9B1AB2A06C002AD86B /* Build configuration list for PBXProject "TreeTraverse" */;
@@ -135,6 +169,7 @@
 			projectRoot = "";
 			targets = (
 				E9397D9F1AB2A06C002AD86B /* TreeTraverse */,
+				E9E910131AB65D3000A0E4D6 /* TreeTraverse-CUDA */,
 			);
 		};
 /* End PBXProject section */
@@ -144,11 +179,20 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E9E910181AB65DB200A0E4D6 /* treecode.cu.cpp.ii in Sources */,
 				E9397DAE1AB2A0DB002AD86B /* treetester.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E9E9101A1AB65DE800A0E4D6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E9E910131AB65D3000A0E4D6 /* TreeTraverse-CUDA */;
+			targetProxy = E9E910191AB65DE800A0E4D6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		E9397DA51AB2A06C002AD86B /* Debug */ = {
@@ -239,6 +283,31 @@
 			};
 			name = Release;
 		};
+		E9E910151AB65D3000A0E4D6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = treecode.cu.cpp.ii;
+			};
+			name = Debug;
+		};
+		E9E910161AB65D3000A0E4D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = treecode.cu.cpp.ii;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -259,6 +328,14 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
+		};
+		E9E910141AB65D3000A0E4D6 /* Build configuration list for PBXLegacyTarget "TreeTraverse-CUDA" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9E910151AB65D3000A0E4D6 /* Debug */,
+				E9E910161AB65D3000A0E4D6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
 		};
 /* End XCConfigurationList section */
 	};
