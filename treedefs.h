@@ -1,6 +1,3 @@
-// We want to transform AOS into SOA wherever possible!
-// This is something we can do with a macro =)
-
 #ifndef _TreeTraverse_TreeDefs_h_
 #define _TreeTraverse_TreeDefs_h_
 
@@ -17,18 +14,15 @@
 
 typedef unsigned short uint16;
 
-template<size_t DIM, typename T> struct _ArrayVecProxy;
+#define ASSERT_ARRAY_BOUNDS(i, elems) if(i >= elems){ \
+printf("%s @ %s:%s: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __FILE__,i,elems); \
+}
+
 
 template<size_t DIM, typename T> struct Vec{
 	T x[DIM];
 
 	UNIVERSAL_STORAGE Vec<DIM, T>(){}
-	UNIVERSAL_STORAGE Vec<DIM, T>(const _ArrayVecProxy<DIM, T> n){
-		for(size_t i = 0; i < DIM; i++){
-			x[i] = *(n.x[i]);
-		}
-	}
-	
 	UNIVERSAL_STORAGE Vec<DIM, T>(const T a[DIM]){
 		for(size_t i = 0; i < DIM; i++){
 			x[i] = a[i];
@@ -92,52 +86,41 @@ template<size_t DIM, typename T> struct Vec{
 	}
 };
 
-template<size_t DIM, typename T> struct VecArray;
-
-template<size_t DIM, typename T> struct _ArrayVecProxy{
-	T* x[DIM];
-	
-	UNIVERSAL_STORAGE _ArrayVecProxy<DIM, T>(){}
-	UNIVERSAL_STORAGE _ArrayVecProxy<DIM, T>(VecArray<DIM, T>& v, size_t ofs) {
-		for(size_t i = 0; i < DIM; i++){
-			x[i] = v.x[i] + ofs;
-		}
-	}
-	
-	UNIVERSAL_STORAGE inline _ArrayVecProxy<DIM, T>& operator=(const Vec<DIM, T>& v) {
-		for(size_t i = 0; i < DIM; i++){
-			*x[i] = v.x[i];
-		}
-		return *this;
-	}
-	
-};
-
 template <size_t DIM, typename T> struct VecArray{
 	T *x[DIM];
+	size_t elems;
 	
-	UNIVERSAL_STORAGE VecArray<DIM, T>(){}
+	UNIVERSAL_STORAGE VecArray<DIM, T>(){
+		setCapacity(0);
+	}
 	UNIVERSAL_STORAGE VecArray<DIM, T>(Vec<DIM, T>& n){
 		for(size_t i = 0; i < DIM; i++){
 			x[i] = n.x+i;
 		}
+		setCapacity(1);
 	}
 	
-	UNIVERSAL_STORAGE inline Vec<DIM, T> operator[](size_t i) const{
-		Vec<DIM, T> t;
+	UNIVERSAL_STORAGE inline void setCapacity(size_t i){
+		elems = i;
+	}
+	
+	UNIVERSAL_STORAGE inline void get(size_t i, Vec<DIM, T> &t) const{
+		ASSERT_ARRAY_BOUNDS(i, elems);
 		for(size_t j = 0; j < DIM; j++){
 			t.x[j] = x[j][i];
 		}
-		return t;
 	}
 	
 	
-	UNIVERSAL_STORAGE inline _ArrayVecProxy<DIM, T> operator[](size_t i) {
-		_ArrayVecProxy<DIM, T> t(*this, i);
-		return t;
+	UNIVERSAL_STORAGE inline void set(size_t i, const Vec<DIM, T> &t) {
+		ASSERT_ARRAY_BOUNDS(i, elems);
+		for(size_t j = 0; j < DIM; j++){
+			x[j][i] = t.x[j];
+		}
 	}
 	
 	UNIVERSAL_STORAGE inline VecArray<DIM, T> operator +(size_t i) const {
+		ASSERT_ARRAY_BOUNDS(i, elems);
 #ifdef __CUDA_ARCH__
 		if(threadIdx.x == 0 && blockIdx.x == 0){
 			printf("Making a new array from %p to %p by incrementing %lu\n",x[0],x[0]+i,i);
@@ -148,6 +131,7 @@ template <size_t DIM, typename T> struct VecArray{
 		for(size_t j = 0; j < DIM; j++){
 			o.x[j] = x[j] + i;
 		}
+		o.setCapacity(elems - i);
 		return o;
 	}
 };
@@ -223,38 +207,6 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfo{
 	T radius;
 };
 
-template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfoArray;
-template<size_t DIM, typename T, size_t MAX_PARTS> struct _ArrayGroupInfoProxy{
-	size_t *childCount;
-	size_t *childStart;
-	_ArrayVecProxy<DIM, T> minX;
-	_ArrayVecProxy<DIM, T> maxX;
-	_ArrayVecProxy<DIM, T> center;
-	T *radius;
-	
-	UNIVERSAL_STORAGE _ArrayGroupInfoProxy<DIM, T, MAX_PARTS>(){}
-	UNIVERSAL_STORAGE _ArrayGroupInfoProxy<DIM, T, MAX_PARTS>(GroupInfoArray<DIM, T, MAX_PARTS>& v, size_t ofs) {
-		childCount = v.childCount + ofs;
-		childStart = v.childStart + ofs;
-		minX = _ArrayVecProxy<DIM, T>(v.minX, ofs);
-		maxX = _ArrayVecProxy<DIM, T>(v.maxX, ofs);
-		center = _ArrayVecProxy<DIM, T>(v.center, ofs);
-		radius = v.radius + ofs;
-	}
-	
-	UNIVERSAL_STORAGE inline _ArrayGroupInfoProxy<DIM, T, MAX_PARTS>& operator=(const GroupInfo<DIM, T, MAX_PARTS> &v) {
-		*childCount = v.childCount;
-		*childStart = v.childStart;
-		//printf("Group info copying to proxy: %lu %lu %lu %lu\n",v.childCount,*childCount,v.childStart,*childStart);
-		minX = v.minX;
-		maxX = v.maxX;
-		center = v.center;
-		*radius = v.radius;
-		
-		return *this;
-	}
-};
-
 template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfoArray{
 	size_t *childCount;
 	size_t *childStart;
@@ -262,26 +214,56 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfoArray{
 	VecArray<DIM, T> maxX;
 	VecArray<DIM, T> center;
 	T *radius;
-	
-	UNIVERSAL_STORAGE inline GroupInfo<DIM, T, MAX_PARTS> operator [](size_t i) const {
-		GroupInfo<DIM, T, MAX_PARTS> t;
-		t.childCount = childCount[i];
-		t.childStart = childStart[i];
-		t.minX = minX[i];
-		t.maxX = maxX[i];
-		t.center = center[i];
-		t.radius = radius[i];
+	size_t elems; // We should suppress elems generation in production code, which means macroing up, or somesuch
+
+	UNIVERSAL_STORAGE GroupInfoArray<DIM, T, MAX_PARTS >() {
+		setCapacity(0);
+		childCount = nullptr;
+		childStart = nullptr;
+		radius = nullptr;
+	}
+	UNIVERSAL_STORAGE GroupInfoArray<DIM, T, MAX_PARTS>(GroupInfo<DIM, T, MAX_PARTS>& g){
+		childCount = &(g.childCount);
+		childStart = &(g.childStart);
 		
-		return t;
+		minX = VecArray<DIM, T>(g.minX);
+		maxX = VecArray<DIM, T>(g.maxX);
+		center = VecArray<DIM, T>(g.center);
+		radius = &(g.radius);
+		setCapacity(1);
 	}
 	
 	
-	UNIVERSAL_STORAGE inline _ArrayGroupInfoProxy<DIM, T, MAX_PARTS> operator [](size_t i) {
-		_ArrayGroupInfoProxy<DIM, T, MAX_PARTS> t(*this, i);
-		return t;
+	UNIVERSAL_STORAGE inline void setCapacity(size_t i){
+		elems = i;
+		minX.setCapacity(i);
+		maxX.setCapacity(i);
+		center.setCapacity(i);
+	}
+	
+	UNIVERSAL_STORAGE inline void get(size_t i, GroupInfo<DIM, T, MAX_PARTS > &t) const {
+		ASSERT_ARRAY_BOUNDS(i, elems);
+		t.childCount = childCount[i];
+		t.childStart = childStart[i];
+		minX.get(i, t.minX);
+		maxX.get(i, t.maxX);
+		center.get(i, t.center);
+		t.radius = radius[i];
+	}
+	
+	
+	UNIVERSAL_STORAGE inline void set(size_t i, const GroupInfo<DIM, T, MAX_PARTS > &t) {
+		ASSERT_ARRAY_BOUNDS(i, elems);
+		childCount[i] = t.childCount;
+		childStart[i] = t.childStart;
+		minX.set(i, t.minX);
+		maxX.set(i, t.maxX);
+		center.set(i, t.center);
+		radius[i] = t.radius;
 	}
 	
 	UNIVERSAL_STORAGE inline GroupInfoArray<DIM, T, MAX_PARTS> operator +(size_t i) const {
+		ASSERT_ARRAY_BOUNDS(i, elems);
 		GroupInfoArray<DIM, T, MAX_PARTS> o;
 		o.childCount = childCount + i;
 		o.childStart = childStart + i;
@@ -289,13 +271,13 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfoArray{
 		o.maxX = maxX + i;
 		o.center = center + i;
 		o.radius = radius + i;
+		o.setCapacity(elems - i);
 		return o;
 	}
 	
 	
 };
 
-template<size_t DIM, typename T> struct _ArrayNodeProxy;
 
 template<size_t DIM, typename T> struct Node{
 	bool isLeaf;
@@ -308,40 +290,6 @@ template<size_t DIM, typename T> struct Node{
 	T radius;
 	
 	UNIVERSAL_STORAGE Node<DIM, T>(){}
-	UNIVERSAL_STORAGE Node<DIM, T>(const _ArrayNodeProxy<DIM, T> n){
-		isLeaf = *n.isLeaf;
-		childCount = *n.childCount;
-		childStart = *n.childStart;
-		minX = n.minX;
-		maxX = n.maxX;
-		barycenter = n.barycenter;
-		mass = *n.mass;
-		radius = *n.radius;
-	}
-};
-
-template<size_t DIM, typename T> struct _ArrayNodeProxy{
-	bool *isLeaf;
-	size_t *childCount;
-	size_t *childStart;
-	_ArrayVecProxy<DIM, T> minX;
-	_ArrayVecProxy<DIM, T> maxX;
-	_ArrayVecProxy<DIM, T> barycenter;
-	T *mass;
-	T *radius;
-	
-	UNIVERSAL_STORAGE inline _ArrayNodeProxy<DIM, T>& operator=(const Node<DIM, T> &v) {
-		*isLeaf = v.isLeaf;
-		*childCount = v.childCount;
-		*childStart = v.childStart;
-		//printf("Node info copying to proxy: %lu %lu %lu %lu\n",v.childCount,*childCount,v.childStart,*childStart);
-		minX = v.minX;
-		maxX = v.maxX;
-		barycenter = v.barycenter;
-		*mass = v.mass;
-		*radius = v.radius;
-		return *this;
-	}
 };
 
 template<size_t DIM, typename T> struct NodeArray{
@@ -353,8 +301,16 @@ template<size_t DIM, typename T> struct NodeArray{
 	VecArray<DIM, T> barycenter;
 	T *mass;
 	T *radius;
+	size_t elems;
 	
-	UNIVERSAL_STORAGE NodeArray<DIM, T>(){}
+	UNIVERSAL_STORAGE NodeArray<DIM, T>(){
+		setCapacity(0);
+		isLeaf = nullptr;
+		childCount = nullptr;
+		childStart = nullptr;
+		mass = nullptr;
+		radius = nullptr;
+	}
 	UNIVERSAL_STORAGE NodeArray<DIM, T>(Node<DIM, T>& n){
 		isLeaf = &(n.isLeaf);
 		childCount = &(n.childCount);
@@ -366,37 +322,44 @@ template<size_t DIM, typename T> struct NodeArray{
 		
 		mass = &(n.mass);
 		radius = &(n.radius);
+		setCapacity(1);
 	}
 	
-	UNIVERSAL_STORAGE inline Node<DIM, T> operator [](size_t i) const {
-		Node<DIM, T> t;
+	
+	UNIVERSAL_STORAGE inline void setCapacity(size_t i){
+		elems = i;
+		minX.setCapacity(i);
+		maxX.setCapacity(i);
+		barycenter.setCapacity(i);
+	}
+	
+	UNIVERSAL_STORAGE inline void get(size_t i, Node<DIM, T> & t) const {
+		ASSERT_ARRAY_BOUNDS(i, elems)
 		t.isLeaf = isLeaf[i];
 		t.childCount = childCount[i];
 		t.childStart = childStart[i];
-		t.minX = minX[i];
-		t.maxX = maxX[i];
-		t.barycenter = barycenter[i];
+		minX.get(i,t.minX);
+		maxX.get(i,t.maxX);
+		barycenter.get(i,t.barycenter);
 		t.mass = mass[i];
 		t.radius = radius[i];
-		
-		return t;
 	}
 	
 	
-	UNIVERSAL_STORAGE inline _ArrayNodeProxy<DIM, T> operator [](size_t i) {
-		_ArrayNodeProxy<DIM, T> t;
-		t.isLeaf = &(isLeaf[i]);
-		t.childCount = &(childCount[i]);
-		t.childStart = &(childStart[i]);
-		t.minX = minX[i];
-		t.maxX = maxX[i];
-		t.barycenter = barycenter[i];
-		t.mass = &(mass[i]);
-		t.radius = &(radius[i]);
-		return t;
+	UNIVERSAL_STORAGE inline void set(size_t i, const  Node<DIM, T> & t) {
+		ASSERT_ARRAY_BOUNDS(i, elems)
+		isLeaf[i] = t.isLeaf;
+		childCount[i] =t.childCount;
+		childStart[i] = t.childStart;
+		minX.set(i,t.minX);
+		maxX.set(i,t.maxX);
+		barycenter.set(i,t.barycenter);
+		mass[i] = t.mass;
+		radius[i] = t.radius;
 	}
 	
 	UNIVERSAL_STORAGE inline NodeArray<DIM, T> operator +(size_t i) const {
+		ASSERT_ARRAY_BOUNDS(i, elems)
 		NodeArray<DIM, T> o;
 		o.isLeaf = isLeaf + i;
 		o.childCount = childCount + i;
@@ -406,6 +369,7 @@ template<size_t DIM, typename T> struct NodeArray{
 		o.barycenter = barycenter + i;
 		o.mass = mass + i;
 		o.radius = radius + i;
+		o.setCapacity(elems - i);
 		return o;
 	}
 	
@@ -418,47 +382,53 @@ template<size_t DIM, typename T> struct Particle{
 	T m;
 };
 
-template<size_t DIM, typename T> struct _ArrayParticleProxy{
-	_ArrayVecProxy<DIM, T> pos;
-	_ArrayVecProxy<DIM, T> vel;
-	T *m;
-	
-	UNIVERSAL_STORAGE inline _ArrayParticleProxy<DIM, T>& operator=(const Particle<DIM, T> &v) {
-		pos = v.pos;
-		vel = v.vel;
-		*m = v.m;
-		return *this;
-	}
-};
-
 template<size_t DIM, typename T> struct ParticleArray{
 	VecArray<DIM, T> pos;
 	VecArray<DIM, T> vel;
 	T *m;
+	size_t elems;
 	
-	UNIVERSAL_STORAGE inline Particle<DIM, T> operator [](size_t i) const {
-		Particle<DIM, T> t;
-		t.pos = pos[i];
-		t.vel = vel[i];
-		t.m = m[i];
-		
-		return t;
+	UNIVERSAL_STORAGE ParticleArray<DIM, T>(){
+		setCapacity(0);
+		m = nullptr;
+	}
+	
+	UNIVERSAL_STORAGE ParticleArray<DIM, T>(Particle<DIM, T>& p){
+		m = &(p.m);
+		pos = VecArray<DIM, T>(p.pos);
+		vel = VecArray<DIM, T>(p.vel);
+		setCapacity(1);
 	}
 	
 	
-	UNIVERSAL_STORAGE inline _ArrayParticleProxy<DIM, T> operator [](size_t i) {
-		_ArrayParticleProxy<DIM, T> t;
-		t.pos = pos[i];
-		t.vel = vel[i];
-		t.m = &(m[i]);
-		return t;
+	UNIVERSAL_STORAGE inline void setCapacity(size_t i){
+		elems = i;
+		pos.setCapacity(i);
+		vel.setCapacity(i);
+	}
+	
+	UNIVERSAL_STORAGE inline void get(size_t i, Particle<DIM, T> &t) const {
+		ASSERT_ARRAY_BOUNDS(i, elems)
+		pos.get(i,t.pos);
+		vel.get(i,t.vel);
+		t.m = m[i];
+	}
+	
+	
+	UNIVERSAL_STORAGE inline void set(size_t i, const Particle<DIM, T> &t) {
+		ASSERT_ARRAY_BOUNDS(i, elems)
+		pos.set(i, t.pos);
+		pos.set(i, t.vel);
+		m[i] = t.m;
 	}
 	
 	UNIVERSAL_STORAGE inline ParticleArray<DIM, T> operator +(size_t i) const {
+		ASSERT_ARRAY_BOUNDS(i, elems)
 		ParticleArray<DIM, T> o;
 		o.pos = pos + i;
 		o.vel = vel + i;
 		o.m = m + i;
+		o.setCapacity(elems - i);
 		return o;
 	}
 	

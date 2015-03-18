@@ -23,7 +23,7 @@ template<size_t DIM, typename Float> void allocDeviceVecArray(size_t width, VecA
 	for(size_t j = 0; j < DIM; j++){
 		gpuErrchk( (cudaMalloc(&(array.x[j]), floatBytes) ));
 	}
-	
+	array.setCapacity(width);
 }
 
 template<size_t DIM, typename Float> void copyDeviceVecArray(size_t width, const VecArray<DIM, Float>& dst, const VecArray<DIM, Float>& src, cudaMemcpyKind dir){
@@ -64,6 +64,7 @@ template<size_t DIM, typename Float> void allocDeviceNodeArray(size_t width, Nod
 	
 	gpuErrchk( (cudaMalloc(&(level.mass), floatBytes) ));
 	gpuErrchk( (cudaMalloc(&(level.radius), floatBytes) ));
+	level.setCapacity(width);
 	
 }
 
@@ -147,6 +148,7 @@ template<size_t DIM, typename Float> void allocDeviceParticleArray(size_t width,
 	allocDeviceVecArray(width, particles.pos);
 	allocDeviceVecArray(width, particles.vel);
 	gpuErrchk( (cudaMalloc(&(particles.m), floatBytes) ));
+	particles.setCapacity(width);
 	
 }
 
@@ -184,6 +186,7 @@ template<size_t DIM, typename Float, size_t MAX_PARTS> void allocDeviceGroupInfo
 	allocDeviceVecArray(width, group.center);
 	
 	gpuErrchk( (cudaMalloc(&(group.radius), floatBytes) ));
+	group.setCapacity(width);
 	
 }
 

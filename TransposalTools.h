@@ -20,6 +20,7 @@ template<size_t DIM, typename Float> void allocVecArray(size_t width, VecArray<D
 	for(size_t j = 0; j < DIM; j++){
 		array.x[j] = new Float[width];
 	}
+	array.setCapacity(width);
 	
 }
 
@@ -55,6 +56,7 @@ template<size_t DIM, typename Float> void allocNodeArray(size_t width, NodeArray
 	
 	level.mass = new Float[width];
 	level.radius = new Float[width];
+	level.setCapacity(width);
 }
 
 template<size_t DIM, typename Float> void copyNodeArray(size_t width, NodeArray<DIM, Float>& level, const NodeArray<DIM, Float>& src){
@@ -126,6 +128,7 @@ template<size_t DIM, typename Float> void allocParticleArray(size_t width, Parti
 	allocVecArray(width, particles.pos);
 	allocVecArray(width, particles.vel);
 	particles.m = new Float[width];
+	particles.setCapacity(width);
 	
 }
 
@@ -161,6 +164,7 @@ template<size_t DIM, typename Float, size_t MAX_PARTS> void allocGroupInfoArray(
 	allocVecArray(width, group.center);
 	
 	group.radius = new Float[width];
+	group.setCapacity(width);
 }
 
 template<size_t DIM, typename Float, size_t MAX_PARTS> void copyGroupInfoArray(size_t width, GroupInfoArray<DIM, Float, MAX_PARTS>& dst, const GroupInfoArray<DIM, Float, MAX_PARTS>& src){

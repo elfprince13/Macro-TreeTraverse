@@ -443,20 +443,20 @@ int main(int argc, char* argv[]) {
 	GroupInfoArray<DIM, Float, N_GROUP> gia;
 	allocGroupInfoArray(groups.size(), gia);
 	for(size_t i = 0; i < groups.size(); i++){
-		gia[i] = groups[i];
+		gia.set(i, groups[i]);
 		//printf("Group info copying to proxy(2): %lu %lu %lu %lu\n",*gia[i].childCount,groups[i].childCount,*gia[i].childStart,groups[i].childStart);
 	}
 	
 	ParticleArray<DIM, Float> pa;
 	allocParticleArray(nPs, pa);
 	for(size_t i = 0; i < nPs; i++){
-		pa[i] = bodiesSorted[i];
+		pa.set(i, bodiesSorted[i]);
 	}
 	
 	VecArray<DIM, Float> va;
 	allocVecArray(nPs, va);
 	for(size_t i = 0; i < nPs; i++){
-		va[i] = forces[i];
+		va.set(i, forces[i]);
 	}
 	
 	NodeArray<DIM, Float> treeA[MAX_LEVELS];
@@ -465,14 +465,14 @@ int main(int argc, char* argv[]) {
 		
 		allocNodeArray(node_counts[i], level);
 		for(size_t j = 0; j < node_counts[i]; j++){
-			level[j] = tree[i][j];
+			level.set(j,tree[i][j]);
 			//printf("Node info copying to proxy(2): %lu %lu %lu %lu\n",*level[j].childCount,tree[i][j].childCount,*level[j].childStart,tree[i][j].childStart);
 		}
 		
 		treeA[i] = level;
 	}
 	
-	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 0, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
+	//traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 0, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
 	
 	freeGroupInfoArray(gia);
 	freeParticleArray(pa);
