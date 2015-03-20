@@ -381,6 +381,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 #define N_GROUP 16
 #define TPPB 128
 #define INTERACTION_THRESHOLD (TPPB / N_GROUP)
+#define MAX_STACK_ENTRIES 300000
 
 int main(int argc, char* argv[]) {
 	int nPs = atoi(argv[1]);
@@ -483,7 +484,7 @@ int main(int argc, char* argv[]) {
 		treeA[i] = level;
 	}
 	
-	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 0, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
+	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 0, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
 	
 	freeGroupInfoArray(gia);
 	freeParticleArray(pa);

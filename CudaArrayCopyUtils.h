@@ -13,13 +13,15 @@
 #include "cudahelper.h"
 #include <iostream>
 
+#define ALLOC_DEBUG_MSG(N) 	printf("%s @ %s:%d: Allocating %lu bytes\n",__func__,__FILE__,__LINE__,N)
+
 //---------------------------------------------------
 
 
 
 template<size_t DIM, typename Float> void allocDeviceVecArray(size_t width, VecArray<DIM, Float>& array){
-	
 	size_t floatBytes = width*sizeof(Float);
+	ALLOC_DEBUG_MSG(floatBytes*DIM);
 	for(size_t j = 0; j < DIM; j++){
 		gpuErrchk( (cudaMalloc(&(array.x[j]), floatBytes) ));
 	}
@@ -52,6 +54,7 @@ template<size_t DIM, typename Float> void freeDeviceVecArray(VecArray<DIM, Float
 template<size_t DIM, typename Float> void allocDevicePointMassArray(size_t width, PointMassArray<DIM, Float>& masses){
 
 	size_t floatBytes = width*sizeof(Float);
+	ALLOC_DEBUG_MSG(floatBytes);
 	allocDeviceVecArray(width, masses.pos);
 	gpuErrchk( (cudaMalloc(&(masses.m), floatBytes) ));
 	masses.setCapacity(width);
@@ -80,6 +83,11 @@ template<size_t DIM, typename Float> void freeDevicePointMassArray(PointMassArra
 template<size_t DIM, typename Float> void allocDeviceNodeArray(size_t width, NodeArray<DIM, Float>& level){
 	
 	// We know how big the tree is now. Don't make extra space
+	
+	ALLOC_DEBUG_MSG(width * (sizeof(bool) + 2 * sizeof(size_t) + sizeof(Float)));
+	
+
+	
 	gpuErrchk( (cudaMalloc(&(level.isLeaf), width*sizeof(bool)) ));
 	
 	size_t countBytes = width*sizeof(size_t);
@@ -198,6 +206,9 @@ template<size_t DIM, typename Float> void freeDeviceParticleArray(ParticleArray<
 
 template<size_t DIM, typename Float, size_t MAX_PARTS> void allocDeviceGroupInfoArray(size_t width, GroupInfoArray<DIM, Float, MAX_PARTS>& group){
 	
+	
+	ALLOC_DEBUG_MSG(width * (2 * sizeof(size_t) + sizeof(Float)));
+	
 	size_t countBytes = width*sizeof(size_t);
 	gpuErrchk( (cudaMalloc(&(group.childCount),  countBytes)) );
 	gpuErrchk( (cudaMalloc(&(group.childStart), countBytes)) );
@@ -218,11 +229,12 @@ template<size_t DIM, typename Float, size_t MAX_PARTS> void copyDeviceGroupInfoA
 	size_t countBytes = width*sizeof(size_t);
 	gpuErrchk( (cudaMemcpy(dst.childCount, src.childCount, countBytes, dir)) );
 	gpuErrchk( (cudaMemcpy(dst.childStart, src.childStart, countBytes, dir)) );
+	/*
 	for(size_t i = 0; i < width; i++){
 		printf("%lu\t",src.childCount[i]);
 	}
 	printf("\n");
-	
+	 //*/
 	
 	size_t floatBytes = width*sizeof(Float);
 	copyDeviceVecArray(width, dst.minX, src.minX, dir);

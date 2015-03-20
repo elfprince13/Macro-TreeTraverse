@@ -68,7 +68,7 @@ template<typename T> __device__ inline void swap(T& a, T& b){
 }
 
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
-__global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DIM, Float, PPG> groupInfo,
+__global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroups, const GroupInfoArray<DIM, Float, PPG> groupInfo,
 								   const size_t startDepth, NodeArray<DIM, Float>* treeLevels, const size_t* treeCounts,
 								   const size_t n, const ParticleArray<DIM, Float> particles, const InteractionTypeArray<DIM, Float, Mode> interactions,
 								   const Float softening, const Float theta,
@@ -148,10 +148,10 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 	}
 	
 	
-	if(blockIdx.x >= nGroups) return; // This probably shouldn't happen?
+	if(blockIdx.x + groupOffset >= nGroups) return; // This probably shouldn't happen?
 	else {
 		GroupInfo<DIM, Float, PPG> tgInfo;
-		groupInfo.get(blockIdx.x,tgInfo);
+		groupInfo.get(blockIdx.x + groupOffset,tgInfo);
 		int threadsPerPart = blockDim.x / tgInfo.childCount;
 		
 		
@@ -408,13 +408,17 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 
 // Something is badly wrong with template resolution if we switch to InteractionType here.
 // I think the compilers are doing name-mangling differently or something
-template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
+template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t MAX_STACK_ENTRIES, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
 void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo, size_t startDepth,
 					  NodeArray<DIM, Float> treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS], size_t n, ParticleArray<DIM, Float> particles, VecArray<DIM, Float> interactions, Float softening, Float theta, size_t blockCt, size_t threadCt){
-	
+
+	std::cout << "Traverse tree with " << blockCt << " blocks and " << threadCt << " tpb"<<std::endl;
 	NodeArray<DIM, Float> placeHolderLevels[MAX_LEVELS];
 	makeDeviceTree<DIM, Float, MAX_LEVELS>(treeLevels, placeHolderLevels, treeCounts);
 	NodeArray<DIM, Float>* cuTreeLevels;
+
+	ALLOC_DEBUG_MSG(MAX_LEVELS*sizeof(NodeArray<DIM, Float>) + MAX_LEVELS * sizeof(size_t));
+
 	gpuErrchk( (cudaMalloc(&cuTreeLevels, MAX_LEVELS*sizeof(NodeArray<DIM, Float>))) );
 	gpuErrchk( (cudaMemcpy(cuTreeLevels, placeHolderLevels, MAX_LEVELS*sizeof(NodeArray<DIM, Float>), cudaMemcpyHostToDevice)) );
 	
@@ -427,12 +431,21 @@ void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo,
 	for(size_t level = 0; level < MAX_LEVELS; level++){
 		biggestRow = (treeCounts[level] > biggestRow) ? treeCounts[level] : biggestRow;
 	}
-	
+
+
+	std::cout << "Biggest row: " << biggestRow  << std::endl;
+
+
 	const size_t stackCapacity = biggestRow;
+	const size_t blocksPerLaunch = MAX_STACK_ENTRIES / stackCapacity;
+	std::cout << "Allowing: " << blocksPerLaunch << " blocks per launch" << std::endl;
+
 	NodeArray<DIM, Float> bfsStackBuffers;
 	size_t * bfsStackCounters;
-	allocDeviceNodeArray(blockCt * 2 * stackCapacity, bfsStackBuffers);
-	gpuErrchk( (cudaMalloc(&bfsStackCounters, blockCt * 2 * sizeof(size_t))) );
+	allocDeviceNodeArray(blocksPerLaunch * 2 * stackCapacity, bfsStackBuffers);
+
+	ALLOC_DEBUG_MSG(blocksPerLaunch * 2 * sizeof(size_t));
+	gpuErrchk( (cudaMalloc(&bfsStackCounters, blocksPerLaunch * 2 * sizeof(size_t))) );
 	
 	
 	GroupInfoArray<DIM, Float, PPG> cuGroupInfo;
@@ -447,13 +460,17 @@ void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo,
 	allocDeviceVecArray(n, cuInteractions);
 	copyDeviceVecArray(n, cuInteractions, interactions, cudaMemcpyHostToDevice);
 	
-	dim3 dimGrid(blockCt);
+	dim3 dimGrid(blocksPerLaunch);
 	dim3 dimBlock(threadCt);
-	std::cout << "Trying to launch with " << threadCt << " / block with " << blockCt << " blocks" << std::endl;
+	std::cout << "Trying to launch with " << threadCt << " / block with " << blocksPerLaunch << " blocks" << std::endl;
 	
-	traverseTreeKernel<DIM, Float, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<dimGrid, dimBlock>>>(nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, n, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
-	gpuErrchk( cudaPeekAtLastError() );
-	gpuErrchk( cudaDeviceSynchronize() );
+	for(size_t blockOffset = 0; blockOffset < blockCt; blockOffset += blocksPerLaunch){
+		std::cout << "Launching " << blockOffset << " / " << blockCt << std::endl;
+		traverseTreeKernel<DIM, Float, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<dimGrid, dimBlock>>>(blockOffset, nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, n, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
+		gpuErrchk( cudaPeekAtLastError() );
+		gpuErrchk( cudaDeviceSynchronize() );
+	}
+
 	
 	copyDeviceVecArray(n, interactions, cuInteractions, cudaMemcpyDeviceToHost);
 	
@@ -470,6 +487,6 @@ void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo,
 	
 }
 
-template void traverseTreeCUDA<3, float, 16, 16, 8, Forces>(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray<3, float, Forces>, float, float, size_t, size_t);
+template void traverseTreeCUDA<3, float, 16, 16, 300000, 8, Forces>(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray<3, float, Forces>, float, float, size_t, size_t);
 
 
