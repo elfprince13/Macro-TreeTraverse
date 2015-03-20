@@ -13,10 +13,8 @@ template<typename T> T factorial(T n)
   return (n == 1 || n == 0) ? 1 : factorial(n - 1) * n;
 }
 
-template<typename Float> Float readFloat(FILE *f) {
-  Float v;
-  fread((void*)(&v), sizeof(v), 1, f);
-  return v;
+template<typename Float, size_t Count> void readFloat(FILE *f, Float v[Count]) {
+  fread((void*)v, sizeof(Float), Count, f);
 }
 
 
@@ -378,7 +376,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 #define SOFTENING 0.001
 #define THETA 0.5
 
-#define MAX_LEVELS 12
+#define MAX_LEVELS 16
 #define NODE_THRESHOLD 16
 #define N_GROUP 16
 #define TPPB 128
@@ -389,23 +387,23 @@ int main(int argc, char* argv[]) {
 	Particle<DIM,Float> *bodies = new Particle<DIM,Float>[nPs] ;
 	Particle<DIM,Float> *bodiesSorted = new Particle<DIM,Float>[nPs] ;
 	InteractionType<DIM,Float,Forces> *forces = new InteractionType<DIM,Float,Forces>[nPs];
+	std::cout << "reading files ..."; std::flush(std::cout);
 	FILE *f = fopen(argv[2],"rb");
 	for(size_t i = 0; i < nPs; i++){
-		bodies[i].mass.m = readFloat<Float>(f);
-		for(size_t j = 0; j < DIM; j++){
-			bodies[i].mass.pos.x[j] = readFloat<Float>(f);
-		}
-		for(int j = 0; j < DIM; j++){
-			bodies[i].vel.x[j] = readFloat<Float>(f);
-		}
+		readFloat<Float,1>(f,&(bodies[i].mass.m));
+		readFloat<Float,DIM>(f,bodies[i].mass.pos.x);
+		readFloat<Float,DIM>(f,bodies[i].vel.x);
 	}
 	fclose(f);
+	std::cout<< "done"<<std::endl;
 	
+	/*
 	Float e_init = sys_energy<DIM, Float>(nPs, bodies);
 	
 	std::cout << nPs << "\t" << (1.0  / nPs) << "\t" << bodies[0].mass.m << "\t" << bodies[nPs - 1].mass.m << std::endl;
 	std::cout << "Init energy:\t" << e_init << std::endl;
-	
+	*/
+	 
 	/*
 	for(int i = 0; i < 10; i++){
 		calc_forces_bruteforce<DIM, Float>(nPs, bodies, forces);
