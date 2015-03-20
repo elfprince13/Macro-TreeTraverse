@@ -95,7 +95,7 @@ template<size_t DIM, size_t MAX_LEVELS, typename Float> void delete_tree(Node<DI
 
 // Assume particles are sorted by z-Order;
 template<size_t DIM, size_t MAX_LEVELS, size_t NODE_THRESHOLD, typename Float>
-void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExtents, Vec<DIM, Float> maxExtents,
+void add_level(std::vector<Node<DIM, Float> > levels[MAX_LEVELS], size_t level, Vec<DIM, Float> minExtents, Vec<DIM, Float> maxExtents,
 				   std::vector< Particle<DIM, Float> > particleV, Particle<DIM, Float>  *particlesDst, size_t node_counts[MAX_LEVELS], size_t &pCount){
 	Node<DIM, Float> nodeHere;
 	nodeHere.minX = minExtents;
@@ -133,6 +133,7 @@ void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExten
 		
 		
 		for(size_t q = 0; q < (1 << DIM); q++){
+			partBuffer[q] = std::vector< Particle<DIM, Float> >();
 			partBuffer[q].clear();
 			for(size_t i = 0; i < DIM; i++){
 				if(q & (1 << i)){
@@ -146,9 +147,10 @@ void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExten
 		}
 		for(auto it = particleV.begin(); it != particleV.end(); ++it){
 			size_t q;
+			Particle<DIM, Float>& here = *it;
 			for(q = 0; q < (1 << DIM); q++){
-				if(contains(minXs[q], maxXs[q], (*it).mass.pos)){
-					partBuffer[q].push_back(*it);
+				if(contains(minXs[q], maxXs[q], here.mass.pos)){
+					partBuffer[q].push_back(here);
 					break;
 				}
 			}
@@ -167,7 +169,8 @@ void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExten
 			}
 		}
 	}
-	levels[level][node_counts[level]++] = nodeHere;
+	levels[level].push_back(nodeHere);
+	node_counts[level]++;
 }
 
 template<size_t MAX_LEVELS> inline void clear_node_counts(size_t node_counts[MAX_LEVELS]){
@@ -178,7 +181,7 @@ template<size_t MAX_LEVELS> inline void clear_node_counts(size_t node_counts[MAX
 
 template<size_t DIM, size_t MAX_LEVELS, size_t NODE_THRESHOLD, typename Float>
 void insert_all(size_t n, const Particle<DIM, Float> *particles, Particle<DIM, Float> *particlesDst,
-							  Node<DIM, Float> **levels, size_t node_counts[MAX_LEVELS]) {
+				std::vector<Node<DIM, Float> > levels[MAX_LEVELS], size_t node_counts[MAX_LEVELS]) {
 	size_t pCount = 0;
 	std::vector< Particle<DIM, Float> > particleV(particles, particles + n);
 	add_level<DIM, MAX_LEVELS, NODE_THRESHOLD, Float>(levels, 0, min_extents<DIM, Float>(n, particles), max_extents<DIM, Float>(n, particles),  particleV, particlesDst, node_counts, pCount);
@@ -192,13 +195,20 @@ template<size_t DIM, size_t MAX_LEVELS, size_t NODE_THRESHOLD, typename Float>
 Node<DIM, Float>** build_tree(size_t n, const Particle<DIM, Float> *particles, Particle<DIM, Float> *particlesDst,
 							  size_t node_counts[MAX_LEVELS]) {
 	
-	Node<DIM, Float> **levels = new Node<DIM, Float>*[MAX_LEVELS];
+	std::vector<Node<DIM, Float>> preLevels[MAX_LEVELS];
 	for(size_t i = 0; i < MAX_LEVELS; i++){
-		levels[i] = new Node<DIM, Float>[1 << (DIM * i)];
+		preLevels[i].clear();
 	}
 	
 	clear_node_counts<MAX_LEVELS>(node_counts);
-	insert_all<DIM, MAX_LEVELS, NODE_THRESHOLD>(n, particles, particlesDst, levels, node_counts);
+	insert_all<DIM, MAX_LEVELS, NODE_THRESHOLD>(n, particles, particlesDst, preLevels, node_counts);
+	
+	Node<DIM, Float> **levels = new Node<DIM, Float>*[MAX_LEVELS];
+	for(size_t i = 0; i < MAX_LEVELS; i++){
+		levels[i] = new Node<DIM, Float>[preLevels[i].size()];
+		memcpy(levels[i], preLevels[i].data(), sizeof(Node<DIM, Float>)*preLevels[i].size());
+	}
+
 
 	return levels;
 }
@@ -368,7 +378,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 #define SOFTENING 0.001
 #define THETA 0.5
 
-#define MAX_LEVELS 8
+#define MAX_LEVELS 12
 #define NODE_THRESHOLD 16
 #define N_GROUP 16
 #define TPPB 128
@@ -415,6 +425,9 @@ int main(int argc, char* argv[]) {
 		for(size_t nodeI = 0; nodeI < node_counts[level]; nodeI++){
 			//std::cout << "Node at level " << level << " has leaf " << tree[level][nodeI].isLeaf << " and " << tree[level][nodeI].childCount << " children" << std::endl;
 			validateCt += tree[level][nodeI].isLeaf ? tree[level][nodeI].childCount : 0;
+			if(tree[level][nodeI].isLeaf && tree[level][nodeI].childCount > NODE_THRESHOLD){
+				printf("Big node @ %lu / %lu: %lu\n",level,nodeI,tree[level][nodeI].childCount);
+			}
 		}
 	}
 	
