@@ -2,3 +2,4 @@
 *.ii
 a.out
 /Debug
+/.ptp-sync

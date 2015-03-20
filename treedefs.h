@@ -15,7 +15,7 @@
 typedef unsigned short uint16;
 
 #define ASSERT_ARRAY_BOUNDS(i, elems) if(i >= elems){ \
-printf("%s @ %s:%s: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __FILE__,i,elems); \
+printf("%s @ %s:%d: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __LINE__,i,elems); \
 }
 
 
@@ -278,6 +278,59 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfoArray{
 	
 };
 
+template<size_t DIM, typename T> struct PointMass{
+	Vec<DIM, T> pos;
+	T m;
+};
+
+template<size_t DIM, typename T> struct PointMassArray{
+	VecArray<DIM, T> pos;
+	T *m;
+	size_t elems;
+	
+	UNIVERSAL_STORAGE PointMassArray<DIM, T>(){
+		setCapacity(0);
+		m = nullptr;
+	}
+	
+	UNIVERSAL_STORAGE PointMassArray<DIM, T>(PointMass<DIM, T>& p){
+		m = &(p.m);
+		pos = VecArray<DIM, T>(p.pos);
+		setCapacity(1);
+	}
+	
+	
+	UNIVERSAL_STORAGE inline void setCapacity(size_t i){
+		elems = i;
+		pos.setCapacity(i);
+	}
+	
+	UNIVERSAL_STORAGE inline void get(size_t i, PointMass<DIM, T> &t) const {
+		ASSERT_ARRAY_BOUNDS(i, elems)
+		pos.get(i,t.pos);
+		t.m = m[i];
+	}
+	
+	
+	UNIVERSAL_STORAGE inline void set(size_t i, const PointMass<DIM, T> &t) {
+		ASSERT_ARRAY_BOUNDS(i, elems)
+		pos.set(i, t.pos);
+		m[i] = t.m;
+	}
+	
+	UNIVERSAL_STORAGE inline PointMassArray<DIM, T> operator +(size_t i) const {
+		ASSERT_ARRAY_BOUNDS(i, elems)
+		PointMassArray<DIM, T> o;
+		o.pos = pos + i;
+		o.m = m + i;
+		o.setCapacity(elems - i);
+		return o;
+	}
+	
+};
+
+
+
 
 template<size_t DIM, typename T> struct Node{
 	bool isLeaf;
@@ -285,8 +338,7 @@ template<size_t DIM, typename T> struct Node{
 	size_t childStart;
 	Vec<DIM, T> minX;
 	Vec<DIM, T> maxX;
-	Vec<DIM, T> barycenter;
-	T mass;
+	PointMass<DIM, T> barycenter;
 	T radius;
 	
 	UNIVERSAL_STORAGE Node<DIM, T>(){}
@@ -298,8 +350,7 @@ template<size_t DIM, typename T> struct NodeArray{
 	size_t *childStart;
 	VecArray<DIM, T> minX;
 	VecArray<DIM, T> maxX;
-	VecArray<DIM, T> barycenter;
-	T *mass;
+	PointMassArray<DIM, T> barycenter;
 	T *radius;
 	size_t elems;
 	
@@ -308,7 +359,6 @@ template<size_t DIM, typename T> struct NodeArray{
 		isLeaf = nullptr;
 		childCount = nullptr;
 		childStart = nullptr;
-		mass = nullptr;
 		radius = nullptr;
 	}
 	UNIVERSAL_STORAGE NodeArray<DIM, T>(Node<DIM, T>& n){
@@ -318,9 +368,8 @@ template<size_t DIM, typename T> struct NodeArray{
 		
 		minX = VecArray<DIM, T>(n.minX);
 		maxX = VecArray<DIM, T>(n.maxX);
-		barycenter = VecArray<DIM, T>(n.barycenter);
+		barycenter = PointMassArray<DIM, T>(n.barycenter);
 		
-		mass = &(n.mass);
 		radius = &(n.radius);
 		setCapacity(1);
 	}
@@ -341,7 +390,6 @@ template<size_t DIM, typename T> struct NodeArray{
 		minX.get(i,t.minX);
 		maxX.get(i,t.maxX);
 		barycenter.get(i,t.barycenter);
-		t.mass = mass[i];
 		t.radius = radius[i];
 	}
 	
@@ -354,7 +402,6 @@ template<size_t DIM, typename T> struct NodeArray{
 		minX.set(i,t.minX);
 		maxX.set(i,t.maxX);
 		barycenter.set(i,t.barycenter);
-		mass[i] = t.mass;
 		radius[i] = t.radius;
 	}
 	
@@ -367,7 +414,6 @@ template<size_t DIM, typename T> struct NodeArray{
 		o.minX = minX + i;
 		o.maxX = maxX + i;
 		o.barycenter = barycenter + i;
-		o.mass = mass + i;
 		o.radius = radius + i;
 		o.setCapacity(elems - i);
 		return o;
@@ -377,25 +423,21 @@ template<size_t DIM, typename T> struct NodeArray{
 };
 
 template<size_t DIM, typename T> struct Particle{
-	Vec<DIM, T> pos;
+	PointMass<DIM, T> mass;
 	Vec<DIM, T> vel;
-	T m;
 };
 
 template<size_t DIM, typename T> struct ParticleArray{
-	VecArray<DIM, T> pos;
+	PointMassArray<DIM, T> mass;
 	VecArray<DIM, T> vel;
-	T *m;
 	size_t elems;
 	
 	UNIVERSAL_STORAGE ParticleArray<DIM, T>(){
 		setCapacity(0);
-		m = nullptr;
 	}
 	
 	UNIVERSAL_STORAGE ParticleArray<DIM, T>(Particle<DIM, T>& p){
-		m = &(p.m);
-		pos = VecArray<DIM, T>(p.pos);
+		mass = PointMassArray<DIM, T>(p.mass);
 		vel = VecArray<DIM, T>(p.vel);
 		setCapacity(1);
 	}
@@ -403,31 +445,28 @@ template<size_t DIM, typename T> struct ParticleArray{
 	
 	UNIVERSAL_STORAGE inline void setCapacity(size_t i){
 		elems = i;
-		pos.setCapacity(i);
+		mass.setCapacity(i);
 		vel.setCapacity(i);
 	}
 	
 	UNIVERSAL_STORAGE inline void get(size_t i, Particle<DIM, T> &t) const {
 		ASSERT_ARRAY_BOUNDS(i, elems)
-		pos.get(i,t.pos);
+		mass.get(i,t.mass);
 		vel.get(i,t.vel);
-		t.m = m[i];
 	}
 	
 	
 	UNIVERSAL_STORAGE inline void set(size_t i, const Particle<DIM, T> &t) {
 		ASSERT_ARRAY_BOUNDS(i, elems)
-		pos.set(i, t.pos);
-		pos.set(i, t.vel);
-		m[i] = t.m;
+		mass.set(i, t.mass);
+		vel.set(i, t.vel);
 	}
 	
 	UNIVERSAL_STORAGE inline ParticleArray<DIM, T> operator +(size_t i) const {
 		ASSERT_ARRAY_BOUNDS(i, elems)
 		ParticleArray<DIM, T> o;
-		o.pos = pos + i;
+		o.mass = mass + i;
 		o.vel = vel + i;
-		o.m = m + i;
 		o.setCapacity(elems - i);
 		return o;
 	}

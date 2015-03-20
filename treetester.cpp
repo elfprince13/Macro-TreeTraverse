@@ -23,9 +23,9 @@ template<typename Float> Float readFloat(FILE *f) {
 template<size_t DIM, typename Float> Float sys_energy(size_t n, Particle<DIM, Float> const *particles){
 	Float energy = 0.0;
 	for(size_t i = 0; i < n; i++){
-		energy += 0.5 * particles[i].m * mag_sq(particles[i].vel);
+		energy += 0.5 * particles[i].mass.m * mag_sq(particles[i].vel);
 		for(size_t j = 0; j < i; j++){
-			energy -= particles[i].m * particles[j].m / mag(particles[i].pos - particles[j].pos);
+			energy -= particles[i].mass.m * particles[j].mass.m / mag(particles[i].mass.pos - particles[j].mass.pos);
 		}
 	}
 	return energy;
@@ -42,8 +42,8 @@ template<size_t ORDER, typename Float> Float forward_euler(Vec<ORDER+1, Float> y
 template<size_t DIM, typename Float> void integrate_system(size_t n, Particle<DIM, Float> *particles, Vec<DIM, Float> const *forces, Float dt){
 	for(size_t i = 0; i < n; i++){
 		for(size_t j = 0; j < DIM; j++){
-			Float posA[3] = {particles[i].pos.x[j], particles[i].vel.x[j], forces[i].x[j] / particles[i].m};
-			Float velA[2] = {particles[i].vel.x[j], forces[i].x[j] / particles[i].m};
+			Float posA[3] = {particles[i].mass.pos.x[j], particles[i].vel.x[j], forces[i].x[j] / particles[i].mass.m};
+			Float velA[2] = {particles[i].vel.x[j], forces[i].x[j] / particles[i].mass.m};
 			Vec<3, Float> posp(posA);
 			Vec<2, Float> velp(velA);
 			particles[i].pos.x[j] = forward_euler<2, Float>(posp, dt);
@@ -58,8 +58,8 @@ template<size_t DIM, typename Float> void calc_forces_bruteforce(size_t n, Parti
 		forces[i] = (Vec<DIM,Float>){.x = {0, 0, 0}};
 		for(size_t j = 0; j< n; j++){
 			if(i == j) j++;
-			Vec<DIM, Float> disp = particles[i].pos - particles[j].pos;
-			forces[i] = (forces[i] + disp * ((particles[i].m * particles[j].m) / (Float)pow(mag_sq(disp),1.5)));
+			Vec<DIM, Float> disp = particles[i].mass.pos - particles[j].mass.pos;
+			forces[i] = (forces[i] + disp * ((particles[i].mass.m * particles[j].mass.m) / (Float)pow(mag_sq(disp),1.5)));
 		}
 	}
 }
@@ -70,7 +70,7 @@ template<size_t DIM, typename Float> Vec<DIM, Float> min_extents(size_t n, Parti
 		minE.x[i] = std::numeric_limits<Float>::infinity();
 	}
 	for(size_t i = 0; i < n; i++){
-		minE = min(minE, particles[i].pos);
+		minE = min(minE, particles[i].mass.pos);
 	}
 	return minE;
 }
@@ -81,7 +81,7 @@ template<size_t DIM, typename Float> Vec<DIM, Float> max_extents(size_t n, Parti
 		maxE.x[i] = -std::numeric_limits<Float>::infinity();
 	}
 	for(size_t i = 0; i < n; i++){
-		maxE = max(maxE, particles[i].pos);
+		maxE = max(maxE, particles[i].mass.pos);
 	}
 	return maxE;
 }
@@ -110,14 +110,14 @@ void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExten
 		Vec<DIM, Float> bary; for(size_t i = 0; i < DIM; i++){ bary.x[i] = 0.0; };
 		for(auto it = particleV.begin(); it != particleV.end(); ++it){
 			particlesDst[pCount++] = *it;
-			mass += (*it).m;
-			bary = bary + ((*it).pos * (*it).m);
+			mass += (*it).mass.m;
+			bary = bary + ((*it).mass.pos * (*it).mass.m);
 		}
 		bary = bary / mass;
-		nodeHere.mass = mass;
-		nodeHere.barycenter = bary;
+		nodeHere.barycenter.pos = bary;
+		nodeHere.barycenter.m = mass;
 		for(auto it = particleV.begin(); it != particleV.end(); ++it){
-			Float radHere = mag((*it).pos - bary);
+			Float radHere = mag((*it).mass.pos - bary);
 			nodeHere.radius = radHere > nodeHere.radius ? radHere : nodeHere.radius;
 		}
 	} else {
@@ -147,7 +147,7 @@ void add_level(Node<DIM, Float> **levels, size_t level, Vec<DIM, Float> minExten
 		for(auto it = particleV.begin(); it != particleV.end(); ++it){
 			size_t q;
 			for(q = 0; q < (1 << DIM); q++){
-				if(contains(minXs[q], maxXs[q], (*it).pos)){
+				if(contains(minXs[q], maxXs[q], (*it).mass.pos)){
 					partBuffer[q].push_back(*it);
 					break;
 				}
@@ -381,9 +381,9 @@ int main(int argc, char* argv[]) {
 	InteractionType<DIM,Float,Forces> *forces = new InteractionType<DIM,Float,Forces>[nPs];
 	FILE *f = fopen(argv[2],"rb");
 	for(size_t i = 0; i < nPs; i++){
-		bodies[i].m = readFloat<Float>(f);
+		bodies[i].mass.m = readFloat<Float>(f);
 		for(size_t j = 0; j < DIM; j++){
-			bodies[i].pos.x[j] = readFloat<Float>(f);		
+			bodies[i].mass.pos.x[j] = readFloat<Float>(f);
 		}
 		for(int j = 0; j < DIM; j++){
 			bodies[i].vel.x[j] = readFloat<Float>(f);
@@ -393,7 +393,7 @@ int main(int argc, char* argv[]) {
 	
 	Float e_init = sys_energy<DIM, Float>(nPs, bodies);
 	
-	std::cout << nPs << "\t" << (1.0  / nPs) << "\t" << bodies[0].m << "\t" << bodies[nPs - 1].m << std::endl;
+	std::cout << nPs << "\t" << (1.0  / nPs) << "\t" << bodies[0].mass.m << "\t" << bodies[nPs - 1].mass.m << std::endl;
 	std::cout << "Init energy:\t" << e_init << std::endl;
 	
 	/*
@@ -472,7 +472,7 @@ int main(int argc, char* argv[]) {
 		treeA[i] = level;
 	}
 	
-	//traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 0, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
+	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 0, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
 	
 	freeGroupInfoArray(gia);
 	freeParticleArray(pa);

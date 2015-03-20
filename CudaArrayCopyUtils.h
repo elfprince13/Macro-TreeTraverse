@@ -43,6 +43,37 @@ template<size_t DIM, typename Float> void freeDeviceVecArray(VecArray<DIM, Float
 	}
 }
 
+
+//---------------------------------------------------
+//---------------------------------------------------
+
+
+
+template<size_t DIM, typename Float> void allocDevicePointMassArray(size_t width, PointMassArray<DIM, Float>& masses){
+
+	size_t floatBytes = width*sizeof(Float);
+	allocDeviceVecArray(width, masses.pos);
+	gpuErrchk( (cudaMalloc(&(masses.m), floatBytes) ));
+	masses.setCapacity(width);
+
+}
+
+template<size_t DIM, typename Float> void copyDevicePointMassArray(size_t width, PointMassArray<DIM, Float>& dst, const PointMassArray<DIM, Float>& src, cudaMemcpyKind dir){
+
+	// We know how big the tree is now. Don't make extra space
+	size_t floatBytes = width*sizeof(Float);
+	copyDeviceVecArray(width, dst.pos, src.pos, dir);
+	gpuErrchk( (cudaMemcpy(dst.m, src.m, floatBytes, dir)) );
+
+}
+
+
+template<size_t DIM, typename Float> void freeDevicePointMassArray(PointMassArray<DIM, Float>& array){
+	freeDeviceVecArray(array.pos);
+	gpuErrchk( (cudaFree(array.m)) );
+}
+
+
 //---------------------------------------------------
 //---------------------------------------------------
 
@@ -58,11 +89,8 @@ template<size_t DIM, typename Float> void allocDeviceNodeArray(size_t width, Nod
 	size_t floatBytes = width*sizeof(Float);
 	allocDeviceVecArray(width, level.minX);
 	allocDeviceVecArray(width, level.maxX);
-	allocDeviceVecArray(width, level.barycenter);
+	allocDevicePointMassArray(width, level.barycenter);
 	
-	
-	
-	gpuErrchk( (cudaMalloc(&(level.mass), floatBytes) ));
 	gpuErrchk( (cudaMalloc(&(level.radius), floatBytes) ));
 	level.setCapacity(width);
 	
@@ -87,10 +115,8 @@ template<size_t DIM, typename Float> void copyDeviceNodeArray(size_t width, Node
 	
 	copyDeviceVecArray(width, level.minX, src.minX, dir);
 	copyDeviceVecArray(width, level.maxX, src.maxX, dir);
-	copyDeviceVecArray(width, level.barycenter, src.barycenter, dir);
+	copyDevicePointMassArray(width, level.barycenter, src.barycenter, dir);
 	
-	
-	gpuErrchk( (cudaMemcpy(level.mass, src.mass, floatBytes, dir)) );
 	gpuErrchk( (cudaMemcpy(level.radius, src.radius, floatBytes, dir)) );
 	
 }
@@ -103,9 +129,8 @@ template<size_t DIM, typename Float> void freeDeviceNodeArray(NodeArray<DIM, Flo
 	
 	freeDeviceVecArray(array.minX);
 	freeDeviceVecArray(array.maxX);
-	freeDeviceVecArray(array.barycenter);
+	freeDevicePointMassArray(array.barycenter);
 	
-	gpuErrchk( (cudaFree(array.mass)) );
 	gpuErrchk( (cudaFree(array.radius)) );
 }
 
@@ -136,7 +161,6 @@ void freeDeviceTree(NodeArray<DIM, Float> placeHolderTree[MAX_LEVELS]){
 	}
 }
 
-
 //---------------------------------------------------
 //---------------------------------------------------
 
@@ -144,10 +168,8 @@ void freeDeviceTree(NodeArray<DIM, Float> placeHolderTree[MAX_LEVELS]){
 
 template<size_t DIM, typename Float> void allocDeviceParticleArray(size_t width, ParticleArray<DIM, Float>& particles){
 	
-	size_t floatBytes = width*sizeof(Float);
-	allocDeviceVecArray(width, particles.pos);
+	allocDevicePointMassArray(width, particles.mass);
 	allocDeviceVecArray(width, particles.vel);
-	gpuErrchk( (cudaMalloc(&(particles.m), floatBytes) ));
 	particles.setCapacity(width);
 	
 }
@@ -155,18 +177,15 @@ template<size_t DIM, typename Float> void allocDeviceParticleArray(size_t width,
 template<size_t DIM, typename Float> void copyDeviceParticleArray(size_t width, ParticleArray<DIM, Float>& dst, const ParticleArray<DIM, Float>& src, cudaMemcpyKind dir){
 	
 	// We know how big the tree is now. Don't make extra space
-	size_t floatBytes = width*sizeof(Float);
-	copyDeviceVecArray(width, dst.pos, src.pos, dir);
+	copyDevicePointMassArray(width, dst.mass, src.mass, dir);
 	copyDeviceVecArray(width, dst.vel, src.vel, dir);
-	gpuErrchk( (cudaMemcpy(dst.m, src.m, floatBytes, dir)) );
 	
 }
 
 
 template<size_t DIM, typename Float> void freeDeviceParticleArray(ParticleArray<DIM, Float>& array){
-	freeDeviceVecArray(array.pos);
+	freeDevicePointMassArray(array.mass);
 	freeDeviceVecArray(array.vel);
-	gpuErrchk( (cudaFree(array.m)) );
 }
 
 //---------------------------------------------------

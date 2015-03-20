@@ -61,7 +61,7 @@ namespace Miniball {
 	struct CoordAccessor<Pit_*, Cit_*> {
 		typedef Pit_*                                  Pit;
 		typedef Cit_*                                 Cit;
-		inline  Cit operator() (Pit it) const { return (*it).pos.x; }
+		inline  Cit operator() (Pit it) const { return (*it).mass.pos.x; }
 	};
 
   // Class Declaration
