@@ -17,7 +17,7 @@
 typedef unsigned short uint16;
 
 #define ASSERT_ARRAY_BOUNDS(i, elems) if(i >= elems){ \
-printf("%s @ %s:%d: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __LINE__,i,elems); \
+/*printf("%s @ %s:%d: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __LINE__,i,elems);*/ \
 }
 
 
