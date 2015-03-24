@@ -30,7 +30,7 @@ __device__ void initStack(ElemTypeArray<DIM, Float> level, size_t levelCt, ElemT
 }
 
 template<size_t DIM, typename Float> __device__ void dumpStackChildren(NodeArray<DIM, Float> stack, const size_t* stackCt){
-	size_t dst = *stackCt;//atomicAdd((unsigned long long*)stackCt, (unsigned long long)0);
+	size_t dst = *stackCt;
 	for(size_t i = 0; i < dst; i++){
 			printf("(%lu) see (%lu %lu) in (%p/%lu)\n",i,stack.childStart[i],stack.childCount[i], stackCt, dst);
 	}
@@ -68,9 +68,9 @@ template<typename T> __device__ inline void swap(T& a, T& b){
 }
 
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
-__global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroups, const GroupInfoArray<DIM, Float, PPG> groupInfo,
+__global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DIM, Float, PPG> groupInfo,
 								   const size_t startDepth, NodeArray<DIM, Float>* treeLevels, const size_t* treeCounts,
-								   const size_t n, const ParticleArray<DIM, Float> particles, const InteractionTypeArray<DIM, Float, Mode> interactions,
+								   const size_t n, const ParticleArray<DIM, Float> particles, InteractionTypeArray<DIM, Float, Mode> interactions,
 								   const Float softening, const Float theta,
 								   size_t *bfsStackCounters, NodeArray<DIM, Float> bfsStackBuffers, const size_t stackCapacity) {
 	
@@ -146,13 +146,13 @@ __global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroup
 			printf("%p ", interactionList.pos.x[j]);
 		} printf("\n");
 	}
+	//if(threadIdx.x == 0)printf("%3d checking in (0)\n",blockIdx.x);
 	
-	
-	if(blockIdx.x + groupOffset >= nGroups) return; // This probably shouldn't happen?
-	else {
+	for(size_t groupOffset = 0; groupOffset + blockIdx.x < nGroups; groupOffset += gridDim.x){
+		if(blockIdx.x == 0 && threadIdx.x == 0) printf("%3d checking in with offset %lu / %lu, inc by %d\n",blockIdx.x,groupOffset,nGroups,gridDim.x);
 		GroupInfo<DIM, Float, PPG> tgInfo;
 		groupInfo.get(blockIdx.x + groupOffset,tgInfo);
-		int threadsPerPart = blockDim.x / tgInfo.childCount;
+		size_t threadsPerPart = blockDim.x / tgInfo.childCount;
 		
 		
 		size_t* pGLCt = interactionCounters;
@@ -160,6 +160,7 @@ __global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroup
 		PointMassArray<DIM, Float> dummyP;
 		initStack<PointMass,PointMassArray>(dummyP, 0, pGList, pGLCt);
 		__threadfence_block();
+		//if(threadIdx.x == 0) printf("pGLCt = %lu\n",*pGLCt);
 		
 		/*
 		if(threadIdx.x == 0 && blockIdx.x == 0){
@@ -234,15 +235,19 @@ __global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroup
 		
 		
 		
+		const size_t useful_thread_ct =  threadsPerPart * tgInfo.childCount;
 		Particle<DIM, Float> particle;
-		if(threadIdx.x > threadsPerPart * tgInfo.childCount){
+		if(threadIdx.x < useful_thread_ct){
+			if(tgInfo.childStart + (threadIdx.x % tgInfo.childCount) >= particles.elems){
+				printf("Getting particle, %d < %lu, so want at %lu + (%d %% %lu) = %lu\n",threadIdx.x,useful_thread_ct,tgInfo.childStart, threadIdx.x, tgInfo.childCount, tgInfo.childStart + (threadIdx.x % tgInfo.childCount));
+			}
 			particles.get(tgInfo.childStart + (threadIdx.x % tgInfo.childCount), particle);
 		}
 		
 		InteractionType<DIM, Float, Mode> interaction = freshInteraction<DIM, Float, Mode>();
 		size_t curDepth = startDepth;
 		while(*cLCt != 0 ){//&& curDepth < MAX_LEVELS){ // Second condition shouldn't matter....
-			if(threadIdx.x == 0 && blockIdx.x == 0)printf("Entering the land of disturbing loops\n");
+			//if(threadIdx.x == 0) printf("%3d.%d Entering the land of disturbing loops\n",blockIdx.x,threadIdx.x);
 			if(threadIdx.x == 0){
 				*nLCt = 0;
 			}
@@ -278,21 +283,18 @@ __global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroup
 			
 			ptrdiff_t startOfs = *cLCt;
 			while(startOfs > 0){
-				if(threadIdx.x == 0 && blockIdx.x == 0) printf("\tEntering the inner crazy loop\n");
+				//if(threadIdx.x == 0) printf("\t%3d.%d Entering the inner crazy loop\n",blockIdx.x,threadIdx.x);
 				ptrdiff_t toGrab = startOfs - blockDim.x + threadIdx.x;
 				if(toGrab >= 0){
 					Node<DIM, Float> nodeHere;
 					currentLevel.get(toGrab, nodeHere);
-					if(toGrab == 0 &&
-					   blockIdx.x == 0){
-						printf("%d.%d @ %lu:\t%lu %lu vs %lu %lu with %lu %ld \n", blockIdx.x, threadIdx.x, curDepth, nodeHere.childStart, nodeHere.childCount, currentLevel.childStart[toGrab], currentLevel.childCount[toGrab], *cLCt, toGrab);
-					}
+					//if(threadIdx.x == 0) printf("\t%d.%d @ %lu:\t%lu %lu vs %lu %lu with %lu %ld \n", blockIdx.x, threadIdx.x, curDepth, nodeHere.childStart, nodeHere.childCount, currentLevel.childStart[toGrab], currentLevel.childCount[toGrab], *cLCt, toGrab);
 					//*
 					if(passesMAC(tgInfo, nodeHere, theta)){
-						if(blockIdx.x == 0) printf("\t%d accepted MAC\n",threadIdx.x);
+						//if(threadIdx.x == 0) printf("\t%d accepted MAC\n",threadIdx.x);
 						if(INTERACTION_THRESHOLD > 0){
 							// Store to C/G list
-							if(blockIdx.x == 0) printf("\t%d found the following:\n\t(%lu %lu) @ (%p/%lu), writing to stack at pos %lu @ %p\n", threadIdx.x, nodeHere.childStart, nodeHere.childCount, treeLevels[curDepth + 1].childStart, curDepth + 1, *nLCt,nLCt);
+							//if(threadIdx.x == 0) printf("\t%d found the following:\n\t(%lu %lu) @ (%p/%lu), writing to stack at pos %lu @ %p\n", threadIdx.x, nodeHere.childStart, nodeHere.childCount, treeLevels[curDepth + 1].childStart, curDepth + 1, *nLCt,nLCt);
 							
 							PointMassArray<DIM, Float> tmpArray(nodeHere.barycenter);
 							size_t tmpCt = 1;
@@ -302,13 +304,13 @@ __global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroup
 							//interaction = interaction + calc_force(particle.m, particle.pos, nodeHere.mass, nodeHere.barycenter, softening);
 						}
 					} else {
-						if(blockIdx.x == 0) printf("\t%d rejected MAC\n",threadIdx.x);
+						//if(threadIdx.x == 0) printf("\t%d rejected MAC\n",threadIdx.x);
 						if(nodeHere.isLeaf){
 							if(INTERACTION_THRESHOLD > 0){
 								// Store to P/G list
 								//printf("Pushing particles %lu particles, ")
 								if(nodeHere.childCount > 16){
-									printf("%d.%d: Adding a lot particles %lu\n",blockIdx.x,threadIdx.x,nodeHere.childCount);
+									printf("\t%d.%d: Adding a lot particles %lu\n",blockIdx.x,threadIdx.x,nodeHere.childCount);
 								}
 								pushAll<PointMass,PointMassArray>(particles.mass + nodeHere.childStart, nodeHere.childCount, pGList, pGLCt);
 							} else {
@@ -329,7 +331,9 @@ __global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroup
 				}
 				__threadfence_block();
 				__syncthreads();
-				
+				if(threadIdx.x == 0)  {
+				//	printf("\t%3d.%d All safely past toGrab\n",blockIdx.x,threadIdx.x);
+				}
 				
 				/*
 				if(threadIdx.x == 0 && blockIdx.x == 0){
@@ -362,15 +366,17 @@ __global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroup
 				//*
 				if(INTERACTION_THRESHOLD > 0){ // Can't diverge, compile-time constant
 					ptrdiff_t innerStartOfs;
-
-					for(innerStartOfs = *pGLCt; innerStartOfs >= INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
+					//if(threadIdx.x == 0) printf("\t%d PGLCt is %lu >? %lu (%ld > %ld)\n",threadIdx.x,*pGLCt,INTERACTION_THRESHOLD,(ptrdiff_t)(*pGLCt),(ptrdiff_t)INTERACTION_THRESHOLD);
+					for(innerStartOfs = *pGLCt; innerStartOfs >= (ptrdiff_t)INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
 						ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
+						// printf("\t%d interacting with %ld = %lu - %lu + (%d / %d)\n",threadIdx.x,toGrab,innerStartOfs,threadsPerPart,threadIdx.x,tgInfo.childCount);
 						if(toGrab >= 0){
 							PointMass<DIM, Float> pHere;
 							pGList.get(toGrab, pHere);
 							interaction = interaction + calc_force(particle.mass, pHere, softening);
 						}
 					}
+					//if(threadIdx.x == 0) printf("\t%d through interaction loop safely\n",threadIdx.x);
 					// Need to update stack pointer
 					// Need to update stack pointer
 					if(threadIdx.x == 0){
@@ -380,28 +386,75 @@ __global__ void traverseTreeKernel(const size_t groupOffset, const size_t nGroup
 				}
 				//*/
 				
-				if(threadIdx.x == 0 && blockIdx.x == 0){
-					printf("Try going around again\n");
-				}
-				
+				//if(threadIdx.x == 0) printf("%3d.%d: Try going around again\n",blockIdx.x,threadIdx.x);
 				
 				startOfs -= blockDim.x;
 				
 				
 			}
 			
-			if(threadIdx.x == 0 && blockIdx.x == 0) printf("Done inside: %lu work remaining\n",*nLCt);
+			//if(threadIdx.x == 0) printf("%3d.%d Done inside: %lu (loopcount at %ld) work remaining at depth: %lu\n",blockIdx.x, threadIdx.x, *nLCt,startOfs,curDepth);
 			
 			swap<NodeArray<DIM, Float>>(currentLevel, nextLevel);
 			swap<size_t*>(cLCt, nLCt);
 			curDepth += 1;
 		}
 		
-		// Process remaining interactions and reduce if multithreading in play
-		
+		// Process remaining interactions
+		//printf("Time to process remainder\n");
+
+		//*
+
+		__threadfence_block();
+		__syncthreads();
+
+		if(INTERACTION_THRESHOLD > 0){ // Can't diverge, compile-time constant
+			ptrdiff_t innerStartOfs;
+
+			for(innerStartOfs = *pGLCt; innerStartOfs > 0; innerStartOfs -= threadsPerPart){
+				ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
+				if(toGrab >= 0){
+					PointMass<DIM, Float> pHere;
+					pGList.get(toGrab, pHere);
+					interaction = interaction + calc_force(particle.mass, pHere, softening);
+				}
+			}
+			// Need to update stack pointer
+			// Need to update stack pointer
+			if(threadIdx.x == 0){
+				atomicExch((unsigned long long *)pGLCt, 0);
+			}
+
+		}
+
+		// This needs to be done in shared memory! We should figure out how to combine with the stack scratch-space!
+
+		if(threadIdx.x < useful_thread_ct){
+			interactions.set(tgInfo.childStart + threadIdx.x, interaction);
+		}
+		//printf("Remainder processed\n");
+
+		__threadfence_block();
+		__syncthreads(); // All forces have been summed and are in view
+
+		// reduce (hack-job fashion for now) if multithreading per particle in play
+		//*
+		//printf("Reducing\n");
+		if(threadIdx.x < tgInfo.childCount){
+			InteractionType<DIM, Float, Mode> accInt = freshInteraction<DIM, Float, Mode>();
+			for(size_t i = 1; i < threadsPerPart; i++){
+				InteractionType<DIM, Float, Mode> tmp;
+				interactions.get(tgInfo.childStart + threadIdx.x + i * tgInfo.childCount, tmp);
+				accInt = accInt + tmp;
+			}
+			interactions.set(tgInfo.childStart + threadIdx.x, interaction + accInt);
+
+		}
+		//if(threadIdx.x == 0) printf("%3d Done reducing\n",blockIdx.x);
 		//*/
 		
 	}
+	return;
 	
 }
 
@@ -464,13 +517,9 @@ void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo,
 	dim3 dimBlock(threadCt);
 	std::cout << "Trying to launch with " << threadCt << " / block with " << blocksPerLaunch << " blocks" << std::endl;
 	
-	for(size_t blockOffset = 0; blockOffset < blockCt; blockOffset += blocksPerLaunch){
-		std::cout << "Launching " << blockOffset << " / " << blockCt << std::endl;
-		traverseTreeKernel<DIM, Float, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<dimGrid, dimBlock>>>(blockOffset, nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, n, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
-		gpuErrchk( cudaPeekAtLastError() );
-		gpuErrchk( cudaDeviceSynchronize() );
-	}
-
+	traverseTreeKernel<DIM, Float, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<dimGrid, dimBlock>>>(nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, n, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
+	gpuErrchk( cudaPeekAtLastError() );
+	gpuErrchk( cudaDeviceSynchronize() );
 	
 	copyDeviceVecArray(n, interactions, cuInteractions, cudaMemcpyDeviceToHost);
 	

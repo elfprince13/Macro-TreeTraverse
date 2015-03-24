@@ -5,7 +5,7 @@
 #include <limits>
 #include <vector>
 #include <algorithm>
-#include <type_traits>
+#include <cstring>
 #include "Miniball.hpp"
 
 template<typename T> T factorial(T n)
@@ -204,7 +204,7 @@ Node<DIM, Float>** build_tree(size_t n, const Particle<DIM, Float> *particles, P
 	Node<DIM, Float> **levels = new Node<DIM, Float>*[MAX_LEVELS];
 	for(size_t i = 0; i < MAX_LEVELS; i++){
 		levels[i] = new Node<DIM, Float>[preLevels[i].size()];
-		memcpy(levels[i], preLevels[i].data(), sizeof(Node<DIM, Float>)*preLevels[i].size());
+		std::memcpy(levels[i], preLevels[i].data(), sizeof(Node<DIM, Float>)*preLevels[i].size());
 	}
 
 
@@ -225,7 +225,7 @@ std::vector<GroupInfo<DIM, Float, N_GROUP> > groups_from_tree(Node<DIM, Float>* 
 				//std::cout << "\t\t\t" << i << std::endl;
 				GroupInfo<DIM, Float, N_GROUP> group;
 				group.childStart = tree[level][node].childStart + i;
-				group.childCount = (i < tree[level][node].childCount) ? N_GROUP : (tree[level][node].childCount % N_GROUP);
+				group.childCount = (i + N_GROUP <= tree[level][node].childCount) ? N_GROUP : (tree[level][node].childCount % N_GROUP);
 				group.minX = min_extents(group.childCount, particles + group.childStart);
 				group.maxX = max_extents(group.childCount, particles + group.childStart);
 				
@@ -484,7 +484,7 @@ int main(int argc, char* argv[]) {
 		treeA[i] = level;
 	}
 	
-	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 0, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
+	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
 	
 	freeGroupInfoArray(gia);
 	freeParticleArray(pa);

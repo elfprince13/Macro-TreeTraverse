@@ -12,6 +12,8 @@
 #define UNIVERSAL_STORAGE
 #endif
 
+#include <type_traits>
+
 typedef unsigned short uint16;
 
 #define ASSERT_ARRAY_BOUNDS(i, elems) if(i >= elems){ \
@@ -122,9 +124,9 @@ template <size_t DIM, typename T> struct VecArray{
 	UNIVERSAL_STORAGE inline VecArray<DIM, T> operator +(size_t i) const {
 		ASSERT_ARRAY_BOUNDS(i, elems);
 #ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0 && blockIdx.x == 0){
+		/*if(threadIdx.x == 0 && blockIdx.x == 0){
 			printf("Making a new array from %p to %p by incrementing %lu\n",x[0],x[0]+i,i);
-		}
+		}*/
 #endif
 		
 		VecArray<DIM, T> o;
