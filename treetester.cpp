@@ -166,6 +166,9 @@ void add_level(std::vector<Node<DIM, Float> > levels[MAX_LEVELS], size_t level, 
 				nodeHere.childCount++;
 			}
 		}
+
+		// We need to initialize barycenter + radius stuff here too or things will be wacky-sax
+		nodeHere.radius = 0;
 	}
 	levels[level].push_back(nodeHere);
 	node_counts[level]++;
@@ -323,6 +326,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 						InteractionType(DIM, Float, Mode) update = freshInteraction<DIM, Float, Mode>();
 						switch (Mode){
 							case CountOnly:
+								//printf("Counting 0 for %lu\n",particleI);
 								update.x[0] = 1;
 								break;
 							case HashInteractions:
@@ -340,6 +344,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 								InteractionType(DIM, Float, Mode) update = freshInteraction<DIM, Float, Mode>();
 								switch (Mode){
 									case CountOnly:
+										//printf("Counting 1 for %lu\n",particleI);
 										update.x[1] = 1; break;
 									case HashInteractions:
 										update.x[1] = childI; break;
@@ -374,7 +379,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 #define Float float
 #define DT 0.001
 #define SOFTENING 0.001
-#define THETA 0.5
+#define THETA 0
 
 #define MAX_LEVELS 16
 #define NODE_THRESHOLD 16
@@ -439,9 +444,9 @@ int main(int argc, char* argv[]) {
 	
 	//*
 	//for(int i = 0; i < 10; i++){
-		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
-		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, CountOnly>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, counts, SOFTENING, THETA);
-		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, HashInteractions>(groups.size(), groups.data(), 0, tree, node_counts, bodiesSorted, hashes, SOFTENING, THETA);
+		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(groups.size(), groups.data(), 1, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
+		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, CountOnly>(groups.size(), groups.data(), 1, tree, node_counts, bodiesSorted, counts, SOFTENING, THETA);
+		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, HashInteractions>(groups.size(), groups.data(), 1, tree, node_counts, bodiesSorted, hashes, SOFTENING, THETA);
 				/*
 		integrate_system<DIM, Float>(nPs, bodiesSorted, forces, DT);
 		Float e_now = sys_energy<DIM, Float>(nPs, bodiesSorted);
@@ -499,7 +504,7 @@ int main(int argc, char* argv[]) {
 	printf("GPU counts =========>\n");
 	traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, CountOnly>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, countsVerify, SOFTENING, THETA, groups.size());
 	printf("GPU hashes =========>\n");
-	//traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, HashInteractions>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, hashesVerify, SOFTENING, THETA, groups.size());
+	traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, HashInteractions>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, hashesVerify, SOFTENING, THETA, groups.size());
 	
 	for(size_t i = 0; i < nPs; i++){
 		Vec<DIM, Float> f;
@@ -516,6 +521,14 @@ int main(int argc, char* argv[]) {
 		countsVerify.get(i, cV);
 		for(size_t j = 0; j < InteractionElems(CountOnly, DIM, 2); j++){
 			printf("%lu %lu %ld\t",c.x[j],cV.x[j],c.x[j] - cV.x[j]);
+		}
+
+		InteractionType(DIM, Float, HashInteractions) h;
+		InteractionType(DIM, Float, HashInteractions) hV;
+		h = hashes[i];
+		hashesVerify.get(i, hV);
+		for(size_t j = 0; j < InteractionElems(HashInteractions, DIM, 2); j++){
+			printf("%lx %lx %lx\t",h.x[j],hV.x[j],h.x[j] ^ hV.x[j]);
 		}
 
 		printf("\n");
