@@ -283,7 +283,7 @@ Vec<DIM, Float> calc_force(Float m1, Vec<DIM, Float> v1, Float m2, Vec<DIM, Floa
 
 template<size_t DIM, typename Float, TraverseMode Mode>
 InteractionType<DIM, Float, Mode> freshInteraction(){
-	Vec<DIM, Float> fresh; for(size_t i = 0; i < InteractionElems(Mode, DIM); i++){
+	Vec<DIM, Float> fresh; for(size_t i = 0; i < InteractionElems(Mode, DIM, 2); i++){
 		fresh.x[i] = 0;
 	}
 	return fresh;
@@ -484,7 +484,7 @@ int main(int argc, char* argv[]) {
 		treeA[i] = level;
 	}
 	
-	traverseTreeCUDA<DIM, Float, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size(), TPPB);
+	traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, va, SOFTENING, THETA, groups.size());
 	
 	freeGroupInfoArray(gia);
 	freeParticleArray(pa);

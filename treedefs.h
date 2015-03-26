@@ -17,7 +17,7 @@
 typedef unsigned short uint16;
 
 #define ASSERT_ARRAY_BOUNDS(i, elems) if(i >= elems){ \
-/*printf("%s @ %s:%d: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __LINE__,i,elems);*/ \
+	printf("%s @ %s:%d: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __LINE__,i,elems); \
 }
 
 
@@ -483,17 +483,30 @@ enum TraverseMode {
 	Forces
 };
 
-//#ifndef _COMPILE_FOR_CUDA_
-// Double the metaprogramming techniques, double the fun
-constexpr size_t InteractionElems(TraverseMode Mode, size_t DIM){
-	return (Mode == CountOnly || Mode == HashInteractions) ? 2 : DIM;
+constexpr UNIVERSAL_STORAGE bool NonForceCondition(TraverseMode Mode){
+	return (Mode == CountOnly || Mode == HashInteractions);
 }
 
-template <size_t DIM, typename Float, TraverseMode Mode>
-using  InteractionType = Vec<InteractionElems(Mode, DIM) , typename std::conditional<Mode == CountOnly || Mode == HashInteractions, size_t, Float>::type >;
+//#ifndef _COMPILE_FOR_CUDA_
+// Double the metaprogramming techniques, double the fun
+constexpr UNIVERSAL_STORAGE size_t InteractionElems(TraverseMode Mode, size_t DIM, size_t nonForceVal){
+	return (NonForceCondition) ? nonForceVal : DIM;
+}
+
+template<typename Float, TraverseMode Mode>
+using InteractionElemType = typename std::conditional<NonForceCondition(Mode), size_t, Float>::type;
 
 template <size_t DIM, typename Float, TraverseMode Mode>
-using  InteractionTypeArray = VecArray<InteractionElems(Mode, DIM) , typename std::conditional<Mode == CountOnly || Mode == HashInteractions, size_t, Float>::type >;
+using  InteractionType = Vec<InteractionElems(Mode, DIM, 2) ,  InteractionElemType<Float, Mode> >;
+
+template <size_t DIM, typename Float, TraverseMode Mode>
+using  InteractionTypeArray = VecArray<InteractionElems(Mode, DIM, 2) , InteractionElemType<Float, Mode> >;
+
+template <size_t DIM, typename Float, TraverseMode Mode>
+using  InteracterType = PointMass<InteractionElems(Mode, DIM, 3), InteractionElemType<Float, Mode> >;
+
+template <size_t DIM, typename Float, TraverseMode Mode>
+using  InteracterTypeArray = PointMassArray<InteractionElems(Mode, DIM, 3), InteractionElemType<Float, Mode> >;
 
 //#endif
 
