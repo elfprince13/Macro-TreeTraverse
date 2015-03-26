@@ -17,7 +17,7 @@
 typedef unsigned short uint16;
 
 #define ASSERT_ARRAY_BOUNDS(i, elems) if(i >= elems){ \
-/*printf("%s @ %s:%d: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __LINE__,i,elems);*/ \
+	printf("%s @ %s:%d: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __LINE__,i,elems); \
 }
 
 
@@ -123,11 +123,6 @@ template <size_t DIM, typename T> struct VecArray{
 	
 	UNIVERSAL_STORAGE inline VecArray<DIM, T> operator +(size_t i) const {
 		ASSERT_ARRAY_BOUNDS(i, elems);
-#ifdef __CUDA_ARCH__
-		/*if(threadIdx.x == 0 && blockIdx.x == 0){
-			printf("Making a new array from %p to %p by incrementing %lu\n",x[0],x[0]+i,i);
-		}*/
-#endif
 		
 		VecArray<DIM, T> o;
 		for(size_t j = 0; j < DIM; j++){
@@ -137,29 +132,6 @@ template <size_t DIM, typename T> struct VecArray{
 		return o;
 	}
 };
-
-/*
-// we require DIM*sizeof(TT) < sizeof(OT) or this will be undefined.
-// Doing this properly with templates is a pain.
-// Also require min(mN,mX) == mN && max(mN,mX) == mX
-template<size_t DIM, typename T, typename TT, typename OT>
-OT zIndex(Vec<DIM, T> v, Vec<DIM, T> mN, Vec<DIM, T> mX) {
-	OT z = 0;
-	Vec<DIM, T> ones; for(size_t i = 0; i < DIM; i++){ ones.x[i] = 1; }
-	Vec<DIM, T> mXSafe = max(ones, mX - mN);
-	Vec<DIM, T> nv = ((v - mN) / mXSafe) * (1 << sizeof(TT));
-	Vec<DIM, TT> bv; for(size_t i = 0; i < DIM; i++){ bv.x[i] = (TT) nv.x[i]; }
-	for(size_t b = 0; b < sizeof(TT); b++){
-		for(size_t i = 0; i < DIM; i++){
-			OT flag = ((bv.x[i] & (1 << b)) >> b);
-			z |= flag << (DIM * b + i);
-		}
-	}
-	return z;
-	
-}
- */
-
 
 template<size_t DIM, typename T> UNIVERSAL_STORAGE bool contains(const Vec<DIM, T> &lower, const Vec<DIM, T> &upper, const Vec<DIM, T> point){
 	bool is_contained = true;
@@ -476,37 +448,25 @@ template<size_t DIM, typename T> struct ParticleArray{
 };
 
 
-
 enum TraverseMode {
 	CountOnly,
 	HashInteractions,
 	Forces
 };
 
-//#ifndef _COMPILE_FOR_CUDA_
+constexpr UNIVERSAL_STORAGE bool NonForceCondition(TraverseMode Mode){
+	return (Mode == CountOnly || Mode == HashInteractions);
+}
 // Double the metaprogramming techniques, double the fun
-constexpr size_t InteractionElems(TraverseMode Mode, size_t DIM){
-	return (Mode == CountOnly || Mode == HashInteractions) ? 2 : DIM;
+constexpr UNIVERSAL_STORAGE size_t InteractionElems(TraverseMode Mode, size_t DIM, size_t nonForceVal){
+	return (NonForceCondition(Mode)) ? nonForceVal : DIM;
 }
 
-template <size_t DIM, typename Float, TraverseMode Mode>
-using  InteractionType = Vec<InteractionElems(Mode, DIM) , typename std::conditional<Mode == CountOnly || Mode == HashInteractions, size_t, Float>::type >;
 
-template <size_t DIM, typename Float, TraverseMode Mode>
-using  InteractionTypeArray = VecArray<InteractionElems(Mode, DIM) , typename std::conditional<Mode == CountOnly || Mode == HashInteractions, size_t, Float>::type >;
-
-//#endif
-
-/*
-
-template<size_t DIM, typename T> struct ParticleComparator{
-	Vec<DIM, T> minX;
-	Vec<DIM, T> maxX;
- bool operator()(Particle<DIM, T> p1, Particle<DIM, T> p2){
-	 return zIndex<DIM, T, unsigned char, size_t>(p1.pos, minX, maxX) <
-	 zIndex<DIM, T, unsigned char, size_t>(p2.pos, minX, maxX);
- }
-};
-*/
+// Using crappy macros for this because template expansion is annoying
+// We can make a nullary-template type, via closure with a struct typedef,
+// or a ternary-template type, directly, but apparently no way to expose it as a template of two co-dependent arguments
+#define InteractionType(DIM, Float, Mode) Vec<InteractionElems(Mode, DIM, 2) , typename std::conditional<NonForceCondition(Mode), size_t, Float>::type >
+#define InteractionTypeArray(DIM, Float, Mode) VecArray<InteractionElems(Mode, DIM, 2) , typename std::conditional<NonForceCondition(Mode), size_t, Float>::type >
 
 #endif
