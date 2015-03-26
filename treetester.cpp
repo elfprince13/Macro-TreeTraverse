@@ -282,7 +282,7 @@ Vec<DIM, Float> calc_force(Float m1, Vec<DIM, Float> v1, Float m2, Vec<DIM, Floa
 }
 
 template<size_t DIM, typename Float, TraverseMode Mode>
-InteractionType<DIM, Float, Mode> freshInteraction(){
+InteractionType(DIM, Float, Mode) freshInteraction(){
 	Vec<DIM, Float> fresh; for(size_t i = 0; i < InteractionElems(Mode, DIM, 2); i++){
 		fresh.x[i] = 0;
 	}
@@ -294,7 +294,7 @@ InteractionType<DIM, Float, Mode> freshInteraction(){
 template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, TraverseMode Mode>
 void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t startDepth,
 				  Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS],
-				  Particle<DIM, Float>* particles, InteractionType<DIM, Float, Mode>* interactions, Float softening, Float theta) {
+				  Particle<DIM, Float>* particles, InteractionType(DIM, Float, Mode)* interactions, Float softening, Float theta) {
 	for (size_t groupI = 0; groupI < nGroups; groupI++) {
 		GroupInfo<DIM, Float, PPG> tgInfo = groupInfo[groupI];
 		for (size_t particleI = tgInfo.childStart; particleI < tgInfo.childStart + tgInfo.childCount; particleI++){
@@ -320,7 +320,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 					Node<DIM, Float> nodeHere = currentLevel[toGrab];
 					if(passesMAC<DIM, Float, PPG>(tgInfo, nodeHere, theta)){
 						// Just interact :)
-						InteractionType<DIM, Float, Mode> update = freshInteraction<DIM, Float, Mode>();
+						InteractionType(DIM, Float, Mode) update = freshInteraction<DIM, Float, Mode>();
 						switch (Mode){
 							case CountOnly:
 								update.x[0] = 1;
@@ -337,7 +337,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 						if(nodeHere.isLeaf){
 							for(size_t childI = nodeHere.childStart; childI < nodeHere.childStart + nodeHere.childCount; childI++){
 								// Just interact :)
-								InteractionType<DIM, Float, Mode> update = freshInteraction<DIM, Float, Mode>();
+								InteractionType(DIM, Float, Mode) update = freshInteraction<DIM, Float, Mode>();
 								switch (Mode){
 									case CountOnly:
 										update.x[1] = 1; break;
@@ -387,7 +387,7 @@ int main(int argc, char* argv[]) {
 	int nPs = atoi(argv[1]);
 	Particle<DIM,Float> *bodies = new Particle<DIM,Float>[nPs] ;
 	Particle<DIM,Float> *bodiesSorted = new Particle<DIM,Float>[nPs] ;
-	InteractionType<DIM,Float,Forces> *forces = new InteractionType<DIM,Float,Forces>[nPs];
+	InteractionType(DIM,Float,Forces) *forces = new InteractionType(DIM,Float,Forces)[nPs];
 	std::cout << "reading files ..."; std::flush(std::cout);
 	FILE *f = fopen(argv[2],"rb");
 	for(size_t i = 0; i < nPs; i++){

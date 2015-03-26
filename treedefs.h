@@ -468,5 +468,7 @@ constexpr UNIVERSAL_STORAGE size_t InteractionElems(TraverseMode Mode, size_t DI
 // or a ternary-template type, directly, but apparently no way to expose it as a template of two co-dependent arguments
 #define InteractionType(DIM, Float, Mode) Vec<InteractionElems(Mode, DIM, 2) , typename std::conditional<NonForceCondition(Mode), size_t, Float>::type >
 #define InteractionTypeArray(DIM, Float, Mode) VecArray<InteractionElems(Mode, DIM, 2) , typename std::conditional<NonForceCondition(Mode), size_t, Float>::type >
+#define InteracterType(DIM, Float, Mode) PointMass<InteractionElems(Mode, DIM, 3), typename std::conditional<NonForceCondition(Mode), size_t, Float>::type >
+#define InteracterTypeArray(DIM, Float, Mode) PointMassArray<InteractionElems(Mode, DIM, 3), typename std::conditional<NonForceCondition(Mode), size_t, Float>::type >
 
 #endif

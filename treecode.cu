@@ -36,6 +36,19 @@ template<size_t DIM, typename Float> __device__ void dumpStackChildren(NodeArray
 	}
 }
 
+template<size_t DIM, typename T> __device__ void pushMeta(const size_t srcSt, const size_t srcCt, PointMassArray<DIM, T> stack, size_t* stackCt){
+	// This is a weird compiler bug. There's no reason this shouldn't have worked without the cast.
+	size_t dst = atomicAdd((unsigned long long*)stackCt, (unsigned long long)srcCt);
+	for(size_t i = dst, j = 0; i < dst + srcCt; i++, j++){
+		PointMass<DIM, T> eHere;
+		eHere.m = 1;
+		eHere.pos.x[0] = srcSt + j;
+		eHere.pos.x[1] = 0;
+		eHere.pos.x[2] = 0;
+		stack.set(i, eHere);
+	}
+}
+
 template<template<size_t, typename> class ElemType, template<size_t, typename> class ElemTypeArray, size_t DIM, typename Float> __device__ void pushAll(const ElemTypeArray<DIM, Float> src, const size_t srcCt, ElemTypeArray<DIM, Float> stack, size_t* stackCt){
 	// This is a weird compiler bug. There's no reason this shouldn't have worked without the cast.
 	size_t dst = atomicAdd((unsigned long long*)stackCt, (unsigned long long)srcCt);
@@ -90,18 +103,19 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 								   const size_t n, const ParticleArray<DIM, Float> particles, InteractionTypeArray(DIM, Float, Mode) interactions,
 								   const Float softening, const Float theta,
 								   size_t *bfsStackCounters, NodeArray<DIM, Float> bfsStackBuffers, const size_t stackCapacity) {
+typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type InteractionElemType;
 #define BUF_MUL 128
 	// TPB must = blockDims.x
 	__shared__ size_t interactionCounters[1];
-	__shared__ Float pointMass[BUF_MUL*INTERACTION_THRESHOLD];
-	__shared__ Float pointPos[DIM * BUF_MUL*INTERACTION_THRESHOLD];
-	__shared__ Float interactionBuf[TPB * InteractionElems(Mode, DIM, 2)];
+	__shared__ InteractionElemType pointMass[BUF_MUL*INTERACTION_THRESHOLD];
+	__shared__ InteractionElemType pointPos[DIM * BUF_MUL*INTERACTION_THRESHOLD];
+	__shared__ InteractionElemType interactionBuf[TPB * InteractionElems(Mode, DIM, 2)];
 	
 	if(threadIdx.x == 0 && blockDim.x != TPB){
 		printf("%d Launched with mismatched TPB parameters\n",blockIdx.x);
 	}
 
-	PointMassArray<DIM, Float> interactionList;
+	InteracterTypeArray(DIM, Float, Mode) interactionList;
 	interactionList.m = pointMass;
 	for(size_t j = 0; j < DIM; j++){
 		interactionList.pos.x[j] = pointPos + (j * BUF_MUL*INTERACTION_THRESHOLD);
@@ -130,8 +144,8 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 		
 		
 		size_t* pGLCt = interactionCounters;
-		PointMassArray<DIM, Float> pGList = interactionList;
-		PointMassArray<DIM, Float> dummyP;
+		InteracterTypeArray(DIM, Float, Mode) pGList = interactionList;
+		InteracterTypeArray(DIM, Float, Mode) dummyP;
 		initStack<PointMass,PointMassArray>(dummyP, 0, pGList, pGLCt);
 		
 		size_t* cLCt = bfsStackCounters + 2 * blockIdx.x;
@@ -182,7 +196,19 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 							// Store to C/G list
 							//if(threadIdx.x == 0) printf("\t%d found the following:\n\t(%lu %lu) @ (%p/%lu), writing to stack at pos %lu @ %p\n", threadIdx.x, nodeHere.childStart, nodeHere.childCount, treeLevels[curDepth + 1].childStart, curDepth + 1, *nLCt,nLCt);
 							
-							PointMassArray<DIM, Float> tmpArray(nodeHere.barycenter);
+							InteracterType(DIM, Float, Mode) nodePush;
+							switch(Mode){
+							case Forces:{
+									nodePush = nodeHere.barycenter; break;}
+							case CountOnly:
+							case HashInteractions:{
+									nodePush.m = 0;
+									nodePush.pos.x[0] = curDepth;
+									nodePush.pos.x[1] = nodeHere.childStart;
+									nodePush.pos.x[2] = nodeHere.childCount;
+									break;}
+							}
+							InteracterTypeArray(DIM, Float, Mode) tmpArray(nodePush);
 							size_t tmpCt = 1;
 							
 							pushAll<PointMass,PointMassArray>(tmpArray, tmpCt, pGList, pGLCt);
@@ -198,7 +224,15 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 								if(nodeHere.childCount > 16){
 									printf("\t%d.%d: Adding a lot particles %lu\n",blockIdx.x,threadIdx.x,nodeHere.childCount);
 								}
-								pushAll<PointMass,PointMassArray>(particles.mass + nodeHere.childStart, nodeHere.childCount, pGList, pGLCt);
+								switch(Mode){
+								case Forces:{
+									pushAll<PointMass, PointMassArray>(particles.mass + nodeHere.childStart, nodeHere.childCount, pGList, pGLCt); break;}
+								case CountOnly:
+								case HashInteractions:{
+									pushMeta(nodeHere.childStart, nodeHere.childCount, pGList, pGLCt);
+									break;}
+								}
+
 							} else {
 								/*
 								 for(size_t pI = nodeHere.childCount; pI > 0; pI -= threadsPerPart ){
@@ -229,7 +263,7 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 						ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
 						// printf("\t%d interacting with %ld = %lu - %lu + (%d / %d)\n",threadIdx.x,toGrab,innerStartOfs,threadsPerPart,threadIdx.x,tgInfo.childCount);
 						if(toGrab >= 0){
-							PointMass<DIM, Float> pHere;
+							InteracterType(DIM, Float, Mode) pHere;
 							pGList.get(toGrab, pHere);
 							interaction = interaction + calc_interaction<DIM, Float, Mode>(particle.mass, pHere, softening);
 						}
@@ -263,7 +297,7 @@ __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DI
 			for(innerStartOfs = *pGLCt; innerStartOfs > 0; innerStartOfs -= threadsPerPart){
 				ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
 				if(toGrab >= 0){
-					PointMass<DIM, Float> pHere;
+					InteracterType(DIM, Float, Mode) pHere;
 					pGList.get(toGrab, pHere);
 					interaction = interaction + calc_interaction<DIM, Float, Mode>(particle.mass, pHere, softening);
 				}
