@@ -20,6 +20,8 @@ typedef unsigned short uint16;
 	printf("%s @ %s:%d: Out of bounds access: %lu >= %lu\n",__func__, __FILE__, __LINE__,i,elems); \
 }
 
+#define ASSERT_DEAD_CODE printf("%s @ %s:%d: Executing dead-code. Something is terribly broken\n",__func__, __FILE__, __LINE__)
+
 
 template<size_t DIM, typename T> struct Vec{
 	T x[DIM];
@@ -85,6 +87,15 @@ template<size_t DIM, typename T> struct Vec{
 			out.x[i] = this->x[i] / v.x[i];
 		}
 		return out;
+	}
+
+	// This code should never run, but is necessary for type-correctness because we can't partially specialize function templates
+	template<size_t DIM2, typename T2> UNIVERSAL_STORAGE inline Vec<DIM, T>& operator=(const Vec<DIM2, T2> &v) {
+		ASSERT_DEAD_CODE;
+		for(size_t i = 0; i < DIM && i < DIM2; i++){
+			this->x[i] = static_cast<T>(v.x[i]);
+		}
+		return *this;
 	}
 };
 
@@ -255,6 +266,14 @@ template<size_t DIM, typename T, size_t MAX_PARTS> struct GroupInfoArray{
 template<size_t DIM, typename T> struct PointMass{
 	Vec<DIM, T> pos;
 	T m;
+
+	// This code should never run, but is necessary for type-correctness because we can't partially specialize function templates
+	template<size_t DIM2, typename T2> UNIVERSAL_STORAGE inline PointMass<DIM, T>& operator=(const PointMass<DIM2, T2> &v) {
+		ASSERT_DEAD_CODE;
+		this->m = static_cast<T>(v.m);
+		this->pos = v.pos;
+		return *this;
+	}
 };
 
 template<size_t DIM, typename T> struct PointMassArray{

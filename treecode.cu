@@ -68,14 +68,16 @@ template<size_t DIM, typename Float, TraverseMode Mode> __device__ InteractionTy
 }
 
 // Needs softening
-template<size_t DIM, typename Float, TraverseMode Mode> __device__ InteractionType(DIM, Float, Mode) calc_interaction(const PointMass<DIM, Float> &m1, const PointMass<DIM, Float> &m2, Float softening){
+
+template<size_t DIM, typename Float, TraverseMode Mode> __device__ InteractionType(DIM, Float, Mode) calc_interaction(const PointMass<DIM, Float> &m1, const InteracterType(DIM, Float, Mode) &m2, Float softening){
 	InteractionType(DIM, Float, Mode) interaction = freshInteraction<DIM, Float, Mode>();
 	size_t isParticle = m2.m != 0;
 	switch(Mode){
 	case Forces:{
-		Vec<DIM, Float> disp = m1.pos - m2.pos;
-		//Another CUDA-induced casting hack here. Otherwise it tries to call the device version of the code
-		interaction = disp * ((m1.m * m2.m) / (Float)(softening + pow((Float)mag_sq(disp),(Float)1.5)));
+		// Reinterpret cast is evil, but necessary here. template-induced dead-code and all.
+		const PointMass<DIM, Float>& m2_inner = reinterpret_cast<const PointMass<DIM, Float>& >(m2);
+		Vec<DIM, Float> disp = m1.pos - m2_inner.pos;
+		interaction = (disp * ((m1.m * m2_inner.m) / (Float)(softening + pow((Float)mag_sq(disp),(Float)1.5))));
 		break;}
 	case CountOnly:
 		interaction.x[isParticle] = 1;
@@ -226,7 +228,7 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 								}
 								switch(Mode){
 								case Forces:{
-									pushAll<PointMass, PointMassArray>(particles.mass + nodeHere.childStart, nodeHere.childCount, pGList, pGLCt); break;}
+									pushAll<PointMass, PointMassArray>(particles.mass + nodeHere.childStart, nodeHere.childCount, *reinterpret_cast<PointMassArray<DIM, Float>* >(&pGList), pGLCt); break;}
 								case CountOnly:
 								case HashInteractions:{
 									pushMeta(nodeHere.childStart, nodeHere.childCount, pGList, pGLCt);
@@ -428,5 +430,6 @@ void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo,
 
 
 template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, Forces>(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, Forces), float, float, size_t);
-
+template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, CountOnly>(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, CountOnly), float, float, size_t);
+template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, HashInteractions>(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, HashInteractions), float, float, size_t);
 
