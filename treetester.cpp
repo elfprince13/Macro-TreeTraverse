@@ -169,6 +169,20 @@ void add_level(std::vector<Node<DIM, Float> > levels[MAX_LEVELS], size_t level, 
 
 		// We need to initialize barycenter + radius stuff here too or things will be wacky-sax
 		nodeHere.radius = 0;
+		nodeHere.barycenter.m = 0;
+		for(size_t i = 0; i < DIM; i++){
+			nodeHere.barycenter.pos.x[i] = 0;
+		}
+		for(size_t i = nodeHere.childStart; i < nodeHere.childStart + nodeHere.childCount; i++){
+			nodeHere.barycenter.m += levels[level+1][i].barycenter.m;
+			nodeHere.barycenter.pos = nodeHere.barycenter.pos + (levels[level+1][i].barycenter.pos * levels[level+1][i].barycenter.m);
+		}
+		nodeHere.barycenter.pos = nodeHere.barycenter.pos / nodeHere.barycenter.m;
+		for(size_t i = nodeHere.childStart; i < nodeHere.childStart + nodeHere.childCount; i++){
+			Float testRadius = mag(nodeHere.barycenter.pos - levels[level+1][i].barycenter.pos) + levels[level+1][i].radius;
+			nodeHere.radius = nodeHere.radius > testRadius ? nodeHere.radius : testRadius;
+		}
+
 	}
 	levels[level].push_back(nodeHere);
 	node_counts[level]++;
@@ -379,7 +393,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 #define Float float
 #define DT 0.001
 #define SOFTENING 0.001
-#define THETA 0
+#define THETA 0.8
 
 #define MAX_LEVELS 16
 #define NODE_THRESHOLD 16
