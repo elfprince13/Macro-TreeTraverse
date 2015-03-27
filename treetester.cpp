@@ -290,11 +290,14 @@ void pushAll(Node<DIM, Float>* nodes, size_t nodeCt, std::vector<Node<DIM, Float
 }
 
 // Needs softening
-template<size_t DIM, typename Float>
-Vec<DIM, Float> calc_force(Float m1, Vec<DIM, Float> v1, Float m2, Vec<DIM, Float> v2, Float softening){
-	Vec<DIM, Float> disp = v1 - v2;
+template<size_t DIM, typename Float, bool spam = false>
+Vec<DIM, Float> calc_force(const PointMass<DIM, Float> &m1, const PointMass<DIM, Float> &m2, Float softening){
+	if(spam){
+		printf("Interacting\t%f %f %f %f vs %f %f %f %f\n",m1.m,m1.pos.x[0],m1.pos.x[1],m1.pos.x[2],m2.m,m2.pos.x[0],m2.pos.x[1],m2.pos.x[2]);
+	}
+	Vec<DIM, Float> disp = m1.pos - m2.pos;
 	Vec<DIM, Float> force;
-	force = disp * ((m1 * m2) / (Float)(softening + pow(mag_sq(disp),1.5)));
+	force = disp * ((m1.m * m2.m) / (Float)(softening + pow(mag_sq(disp),1.5)));
 	return force;
 }
 
@@ -308,7 +311,7 @@ InteractionType(DIM, Float, Mode) freshInteraction(){
 
 
 
-template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, TraverseMode Mode>
+template<size_t DIM, typename Float, size_t PPG, size_t MAX_LEVELS, TraverseMode Mode, bool spam = false>
 void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t startDepth,
 				  Node<DIM, Float>* treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS],
 				  Particle<DIM, Float>* particles, InteractionType(DIM, Float, Mode)* interactions, Float softening, Float theta) {
@@ -335,6 +338,9 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 					size_t toGrab = startOfs - 1;
 					//std::cout << "want to grab " << toGrab << " from " << curDepth << " this is " << startOfs << " - 1  = " << (startOfs - 1) << std::endl;
 					Node<DIM, Float> nodeHere = currentLevel[toGrab];
+					if(spam){
+						printf("%lu.%lu comparing against node @ %lu.%lu:%lu.%d = %d\n",groupI,particleI,curDepth,nodeHere.childStart,nodeHere.childCount,nodeHere.isLeaf,passesMAC<DIM, Float, PPG>(tgInfo, nodeHere, theta));
+					}
 					if(passesMAC<DIM, Float, PPG>(tgInfo, nodeHere, theta)){
 						// Just interact :)
 						InteractionType(DIM, Float, Mode) update = freshInteraction<DIM, Float, Mode>();
@@ -347,12 +353,13 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 								update.x[0] = curDepth ^ nodeHere.childCount ^ nodeHere.childStart;
 								break;
 							case Forces:
-								update = calc_force(particle.mass.m, particle.mass.pos, nodeHere.barycenter.m, nodeHere.barycenter.pos, softening);
+								update = calc_force<DIM, Float, spam>(particle.mass, nodeHere.barycenter, softening);
 								break;
 						}
 						interaction = interaction + update;
 					} else {
 						if(nodeHere.isLeaf){
+							if(spam) printf("%lu.%lu leaf contains %lu:%lu\n",groupI,particleI,nodeHere.childStart,nodeHere.childCount);
 							for(size_t childI = nodeHere.childStart; childI < nodeHere.childStart + nodeHere.childCount; childI++){
 								// Just interact :)
 								InteractionType(DIM, Float, Mode) update = freshInteraction<DIM, Float, Mode>();
@@ -363,7 +370,7 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 									case HashInteractions:
 										update.x[1] = childI; break;
 									case Forces:
-										update = calc_force(particle.mass.m, particle.mass.pos, particles[childI].mass.m, particles[childI].mass.pos, softening);
+										update = calc_force<DIM, Float, spam>(particle.mass, particles[childI].mass, softening);
 										break;
 										
 								}
@@ -454,6 +461,8 @@ int main(int argc, char* argv[]) {
 	std::cout << "Total in leaves:\t" << validateCt << "\tvs\t" << nPs << "\tto start "<< std::endl;
 	
 	std::vector<GroupInfo<DIM, Float, N_GROUP> > groups = groups_from_tree<DIM, MAX_LEVELS, N_GROUP>(tree, node_counts, bodiesSorted);
+	std::vector<GroupInfo<DIM, Float, N_GROUP> > retakes;
+	retakes.clear();
 	std::cout << "We have " << groups.size() << " groups " << std::endl;
 	
 	//*
@@ -520,36 +529,62 @@ int main(int argc, char* argv[]) {
 	printf("GPU hashes =========>\n");
 	traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, HashInteractions>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, hashesVerify, SOFTENING, THETA, groups.size());
 	
-	for(size_t i = 0; i < nPs; i++){
-		Vec<DIM, Float> f;
-		Vec<DIM, Float> fV;
-		f = forces[i];
-		forcesVerify.get(i, fV);
-		for(size_t j = 0; j < DIM; j++){
-			printf("%f ",fabs(f.x[j] - fV.x[j]));
-		} printf("%f\t",mag(f - fV));
+	for(size_t k = 0; k < groups.size(); k++){
+		GroupInfo<DIM, Float, N_GROUP> groupHere = groups[k];
+		bool oops = false;
+		for(size_t i = groupHere.childStart; i < groupHere.childStart + groupHere.childCount; i++ ){
+			printf("%lu\t",i);
+			Vec<DIM, Float> f;
+			Vec<DIM, Float> fV;
+			f = forces[i];
+			forcesVerify.get(i, fV);
+			for(size_t j = 0; j < DIM; j++){
+				printf("%f ",fabs(f.x[j] - fV.x[j]));
+			} printf("%f\t",mag(f - fV));
 
-		InteractionType(DIM, Float, CountOnly) c;
-		InteractionType(DIM, Float, CountOnly) cV;
-		c = counts[i];
-		countsVerify.get(i, cV);
-		for(size_t j = 0; j < InteractionElems(CountOnly, DIM, 2); j++){
-			printf("%lu %lu %ld\t",c.x[j],cV.x[j],c.x[j] - cV.x[j]);
+			InteractionType(DIM, Float, CountOnly) c;
+			InteractionType(DIM, Float, CountOnly) cV;
+			c = counts[i];
+			countsVerify.get(i, cV);
+			for(size_t j = 0; j < InteractionElems(CountOnly, DIM, 2); j++){
+				printf("%lu %lu %ld\t",c.x[j],cV.x[j],c.x[j] - cV.x[j]);
+				oops |= (c.x[j] - cV.x[j]) != 0;
+			}
+
+			InteractionType(DIM, Float, HashInteractions) h;
+			InteractionType(DIM, Float, HashInteractions) hV;
+			h = hashes[i];
+			hashesVerify.get(i, hV);
+			for(size_t j = 0; j < InteractionElems(HashInteractions, DIM, 2); j++){
+				printf("%lx %lx %lx\t",h.x[j],hV.x[j],h.x[j] ^ hV.x[j]);
+				oops |= (h.x[j] ^ hV.x[j]) != 0;
+			}
+			printf("\n");
 		}
-
-		InteractionType(DIM, Float, HashInteractions) h;
-		InteractionType(DIM, Float, HashInteractions) hV;
-		h = hashes[i];
-		hashesVerify.get(i, hV);
-		for(size_t j = 0; j < InteractionElems(HashInteractions, DIM, 2); j++){
-			printf("%lx %lx %lx\t",h.x[j],hV.x[j],h.x[j] ^ hV.x[j]);
-		}
-
-		printf("\n");
-
+		if(oops) retakes.push_back(groupHere);
 	}
 
 	freeGroupInfoArray(gia);
+
+	if(retakes.size() != 0){
+		GroupInfoArray<DIM, Float, N_GROUP> ria;
+		allocGroupInfoArray(retakes.size(), ria);
+		for(size_t i = 0; i < retakes.size(); i++){
+			ria.set(i, retakes[i]);
+			//printf("Group info copying to proxy(2): %lu %lu %lu %lu\n",*gia[i].childCount,groups[i].childCount,*gia[i].childStart,groups[i].childStart);
+		}
+
+		printf("reprocessing %lu (/ %lu) groups with problems\n",retakes.size(), groups.size());
+		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces, true>(1, retakes.data(), 1, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
+		printf("------------\n");
+		printf("------------\n");
+		printf("------------\n");
+		traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces, true>(1, ria, 1, treeA, node_counts, nPs, pa, forcesVerify, SOFTENING, THETA, groups.size());
+
+
+
+		freeGroupInfoArray(ria);
+	}
 	freeParticleArray(pa);
 	freeVecArray(forcesVerify);
 	freeVecArray(countsVerify);

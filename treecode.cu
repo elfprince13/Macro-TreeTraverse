@@ -69,12 +69,15 @@ template<size_t DIM, typename Float, TraverseMode Mode> __device__ InteractionTy
 
 // Needs softening
 
-template<size_t DIM, typename Float, TraverseMode Mode> __device__ InteractionType(DIM, Float, Mode) calc_interaction(const PointMass<DIM, Float> &m1, const InteracterType(DIM, Float, Mode) &m2, Float softening){
+template<size_t DIM, typename Float, TraverseMode Mode, bool spam = false> __device__ InteractionType(DIM, Float, Mode) calc_interaction(const PointMass<DIM, Float> &m1, const InteracterType(DIM, Float, Mode) &m2, Float softening){
 	InteractionType(DIM, Float, Mode) interaction = freshInteraction<DIM, Float, Mode>();
 	size_t isParticle = m2.m != 0;
 	switch(Mode){
 	case Forces:{
 		// Reinterpret cast is evil, but necessary here. template-induced dead-code and all.
+		if(spam){
+			printf("Interacting\t%f %f %f %f vs %f %f %f %f\n",m1.m,m1.pos.x[0],m1.pos.x[1],m1.pos.x[2],m2.m,m2.pos.x[0],m2.pos.x[1],m2.pos.x[2]);
+		}
 		const PointMass<DIM, Float>& m2_inner = reinterpret_cast<const PointMass<DIM, Float>& >(m2);
 		Vec<DIM, Float> disp = m1.pos - m2_inner.pos;
 		interaction = (disp * ((m1.m * m2_inner.m) / (Float)(softening + pow((Float)mag_sq(disp),(Float)1.5))));
@@ -99,7 +102,7 @@ template<typename T> __device__ inline void swap(T& a, T& b){
 	T c(a); a=b; b=c;
 }
 
-template<size_t DIM, typename Float, size_t TPB, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
+template<size_t DIM, typename Float, size_t TPB, size_t PPG, size_t MAX_LEVELS, size_t INTERACTION_THRESHOLD, TraverseMode Mode, bool spam>
 __global__ void traverseTreeKernel(const size_t nGroups, const GroupInfoArray<DIM, Float, PPG> groupInfo,
 								   const size_t startDepth, NodeArray<DIM, Float>* treeLevels, const size_t* treeCounts,
 								   const size_t n, const ParticleArray<DIM, Float> particles, InteractionTypeArray(DIM, Float, Mode) interactions,
@@ -192,6 +195,12 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 					currentLevel.get(toGrab, nodeHere);
 					//if(threadIdx.x == 0) printf("\t%d.%d @ %lu:\t%lu %lu vs %lu %lu with %lu %ld \n", blockIdx.x, threadIdx.x, curDepth, nodeHere.childStart, nodeHere.childCount, currentLevel.childStart[toGrab], currentLevel.childCount[toGrab], *cLCt, toGrab);
 					//*
+					if(spam){
+						printf("%lu.%lu comparing against node @ %lu.%lu:%lu.%d = %d\n",
+								blockIdx.x + groupOffset,
+								tgInfo.childStart + (threadIdx.x % tgInfo.childCount),
+								curDepth,nodeHere.childStart,nodeHere.childCount,nodeHere.isLeaf,passesMAC<DIM, Float, PPG>(tgInfo, nodeHere, theta));
+					}
 					if(passesMAC(tgInfo, nodeHere, theta)){
 						//if(threadIdx.x == 0) printf("\t%d accepted MAC\n",threadIdx.x);
 						if(INTERACTION_THRESHOLD > 0){
@@ -215,6 +224,7 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 							
 							pushAll<PointMass,PointMassArray>(tmpArray, tmpCt, pGList, pGLCt);
 						} else if(threadIdx.x < tgInfo.childCount){
+							ASSERT_DEAD_CODE;
 							//interaction = interaction + calc_force(particle.m, particle.pos, nodeHere.mass, nodeHere.barycenter, softening);
 						}
 					} else {
@@ -223,6 +233,8 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 							if(INTERACTION_THRESHOLD > 0){
 								// Store to P/G list
 								//printf("Pushing particles %lu particles, ")
+								if(spam) printf("%lu.%lu leaf contains %lu:%lu\n",blockIdx.x + groupOffset, tgInfo.childStart + (threadIdx.x % tgInfo.childCount),nodeHere.childStart,nodeHere.childCount);
+
 								if(nodeHere.childCount > 16){
 									printf("\t%d.%d: Adding a lot particles %lu\n",blockIdx.x,threadIdx.x,nodeHere.childCount);
 								}
@@ -236,6 +248,7 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 								}
 
 							} else {
+								ASSERT_DEAD_CODE;
 								/*
 								 for(size_t pI = nodeHere.childCount; pI > 0; pI -= threadsPerPart ){
 									ptrdiff_t toGrab = pI - threadsPerPart + (threadIdx.x / tgInfo.childCount);
@@ -267,7 +280,7 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 						if(toGrab >= 0){
 							InteracterType(DIM, Float, Mode) pHere;
 							pGList.get(toGrab, pHere);
-							interaction = interaction + calc_interaction<DIM, Float, Mode>(particle.mass, pHere, softening);
+							interaction = interaction + calc_interaction<DIM, Float, Mode, spam>(particle.mass, pHere, softening);
 						}
 					}
 					//if(threadIdx.x == 0) printf("\t%d through interaction loop safely\n",threadIdx.x);
@@ -301,7 +314,7 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 				if(toGrab >= 0){
 					InteracterType(DIM, Float, Mode) pHere;
 					pGList.get(toGrab, pHere);
-					interaction = interaction + calc_interaction<DIM, Float, Mode>(particle.mass, pHere, softening);
+					interaction = interaction + calc_interaction<DIM, Float, Mode, spam>(particle.mass, pHere, softening);
 				}
 			}
 			// Need to update stack pointer
@@ -352,7 +365,7 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
  	 	 	 	 	 NodeArray<3, float> *, size_t *,
  	 	 	 	 	 size_t, ParticleArray<3, float>, VecArray<3, float>, float, float, size_t);
 */
-template<size_t DIM, typename Float, size_t threadCt, size_t PPG, size_t MAX_LEVELS, size_t MAX_STACK_ENTRIES, size_t INTERACTION_THRESHOLD, TraverseMode Mode>
+template<size_t DIM, typename Float, size_t threadCt, size_t PPG, size_t MAX_LEVELS, size_t MAX_STACK_ENTRIES, size_t INTERACTION_THRESHOLD, TraverseMode Mode, bool spam>
 void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo, size_t startDepth,
 					  NodeArray<DIM, Float> treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS],
 					  size_t n, ParticleArray<DIM, Float> particles, InteractionTypeArray(DIM, Float, Mode) interactions, Float softening, Float theta, size_t blockCt){
@@ -409,7 +422,7 @@ void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo,
 	dim3 dimBlock(threadCt);
 	std::cout << "Trying to launch with " << threadCt << " / block with " << blocksPerLaunch << " blocks" << std::endl;
 	
-	traverseTreeKernel<DIM, Float, threadCt, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode><<<dimGrid, dimBlock>>>(nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, n, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
+	traverseTreeKernel<DIM, Float, threadCt, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode, spam><<<dimGrid, dimBlock>>>(nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, n, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
 	
@@ -429,7 +442,8 @@ void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo,
 }
 
 
-template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, Forces>(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, Forces), float, float, size_t);
-template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, CountOnly>(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, CountOnly), float, float, size_t);
-template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, HashInteractions>(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, HashInteractions), float, float, size_t);
+template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, Forces, true>				(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, Forces), float, float, size_t);
+template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, Forces, false>				(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, Forces), float, float, size_t);
+template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, CountOnly, false>			(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, CountOnly), float, float, size_t);
+template void traverseTreeCUDA<3, float, 128, 16, 16, 300000, 8, HashInteractions, false>	(size_t, GroupInfoArray<3, float, 16>, size_t, NodeArray<3, float> *, size_t *, size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, HashInteractions), float, float, size_t);
 

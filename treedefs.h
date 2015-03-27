@@ -274,6 +274,13 @@ template<size_t DIM, typename T> struct PointMass{
 		this->pos = v.pos;
 		return *this;
 	}
+
+	UNIVERSAL_STORAGE inline void printContents() const {
+		printf("%f ",m);
+		for(size_t i = 0; i < DIM; i++){
+			printf("%f ",pos.x[i]);
+		}
+	}
 };
 
 template<size_t DIM, typename T> struct PointMassArray{
