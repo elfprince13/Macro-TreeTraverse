@@ -133,16 +133,8 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 	}
 	interactionScratch.setCapacity(TPB);
 
-	if(threadIdx.x == 0 && blockIdx.x == 0){
-		printf("%p\n",interactionList.m);
-		for(size_t j = 0; j < DIM; j++){
-			printf("%p ", interactionList.pos.x[j]);
-		} printf("\n");
-	}
-	//if(threadIdx.x == 0)printf("%3d checking in (0)\n",blockIdx.x);
 	
 	for(size_t groupOffset = 0; groupOffset + blockIdx.x < nGroups; groupOffset += gridDim.x){
-		if(blockIdx.x == 0 && threadIdx.x == 0) printf("%3d checking in with offset %lu / %lu, inc by %d\n",blockIdx.x,groupOffset,nGroups,gridDim.x);
 		GroupInfo<DIM, Float, PPG> tgInfo;
 		groupInfo.get(blockIdx.x + groupOffset,tgInfo);
 		size_t threadsPerPart = blockDim.x / tgInfo.childCount;
@@ -188,6 +180,10 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 			__syncthreads();
 			
 			ptrdiff_t startOfs = *cLCt;
+			if(spam && threadIdx.x == 0){
+				printf("%lu.%lu has %ld @ %lu\n",blockIdx.x + groupOffset,tgInfo.childStart + (threadIdx.x % tgInfo.childCount), startOfs,	curDepth);
+			}
+
 			while(startOfs > 0){
 				ptrdiff_t toGrab = startOfs - blockDim.x + threadIdx.x;
 				if(toGrab >= 0){
@@ -277,7 +273,7 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 					for(innerStartOfs = *pGLCt; innerStartOfs >= (ptrdiff_t)INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
 						ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
 						// printf("\t%d interacting with %ld = %lu - %lu + (%d / %d)\n",threadIdx.x,toGrab,innerStartOfs,threadsPerPart,threadIdx.x,tgInfo.childCount);
-						if(toGrab >= 0){
+						if(toGrab >= 0 && threadIdx.x < useful_thread_ct){
 							InteracterType(DIM, Float, Mode) pHere;
 							pGList.get(toGrab, pHere);
 							interaction = interaction + calc_interaction<DIM, Float, Mode, spam>(particle.mass, pHere, softening);
@@ -311,7 +307,7 @@ typedef typename std::conditional<NonForceCondition(Mode), size_t, Float>::type 
 
 			for(innerStartOfs = *pGLCt; innerStartOfs > 0; innerStartOfs -= threadsPerPart){
 				ptrdiff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
-				if(toGrab >= 0){
+				if(toGrab >= 0 && threadIdx.x < useful_thread_ct){
 					InteracterType(DIM, Float, Mode) pHere;
 					pGList.get(toGrab, pHere);
 					interaction = interaction + calc_interaction<DIM, Float, Mode, spam>(particle.mass, pHere, softening);

@@ -233,33 +233,42 @@ std::vector<GroupInfo<DIM, Float, N_GROUP> > groups_from_tree(Node<DIM, Float>* 
 	std::vector<GroupInfo<DIM, Float, N_GROUP> > groups;
 	groups.clear();
 	//std::cout << "collecting groups:" << std::endl;
+	size_t groupTotals = 0;
 	for(size_t level = 0; level < MAX_LEVELS; level++){
 		//std::cout << "\t"<< level << std::endl;
 		for(size_t node = 0; node < node_counts[level]; node++){
 			//std::cout << "\t\t"<< node <<std::endl;
 			// We probably don't want to load balance groups because under-full groups can ante-up per-particles
-			for(size_t i = 0; i < tree[level][node].childCount; i += N_GROUP){
-				//std::cout << "\t\t\t" << i << std::endl;
-				GroupInfo<DIM, Float, N_GROUP> group;
-				group.childStart = tree[level][node].childStart + i;
-				group.childCount = (i + N_GROUP <= tree[level][node].childCount) ? N_GROUP : (tree[level][node].childCount % N_GROUP);
-				group.minX = min_extents(group.childCount, particles + group.childStart);
-				group.maxX = max_extents(group.childCount, particles + group.childStart);
-				
-				// Here, and where we do the same for nodes, we should consider using Miniball instead
-				// But this is a faster heuristic and will be fine for plummer spheres (and hopefully in general)
-				
-				typedef const Particle<DIM, Float>* PointAccessor;
-				typedef const Float* CoordAccessor;
-				typedef Miniball::Miniball<Miniball::CoordAccessor<PointAccessor, CoordAccessor>> MB;
-				MB mb (DIM, particles + group.childStart, particles + group.childStart + group.childCount);
-				const Float *center = mb.center();
-				for(size_t j = 0; j < DIM; j++){
-					group.center.x[j] = center[j];
-				}
-				group.radius = sqrt(mb.squared_radius());
+			if(tree[level][node].isLeaf){
+				size_t groupCt = 0;
+				for(size_t i = 0; i < tree[level][node].childCount && tree[level]; i += N_GROUP){
+					//std::cout << "\t\t\t" << i << std::endl;
+					GroupInfo<DIM, Float, N_GROUP> group;
+					group.childStart = tree[level][node].childStart + i;
+					group.childCount = (i + N_GROUP <= tree[level][node].childCount) ? N_GROUP : (tree[level][node].childCount % N_GROUP);
+					group.minX = min_extents(group.childCount, particles + group.childStart);
+					group.maxX = max_extents(group.childCount, particles + group.childStart);
 
-				groups.push_back(group);
+					// Here, and where we do the same for nodes, we should consider using Miniball instead
+					// But this is a faster heuristic and will be fine for plummer spheres (and hopefully in general)
+
+					typedef const Particle<DIM, Float>* PointAccessor;
+					typedef const Float* CoordAccessor;
+					typedef Miniball::Miniball<Miniball::CoordAccessor<PointAccessor, CoordAccessor>> MB;
+					MB mb (DIM, particles + group.childStart, particles + group.childStart + group.childCount);
+					const Float *center = mb.center();
+					for(size_t j = 0; j < DIM; j++){
+						group.center.x[j] = center[j];
+					}
+					group.radius = sqrt(mb.squared_radius());
+
+					groupCt += group.childCount;
+					groupTotals += group.childCount;
+					groups.push_back(group);
+				}
+				if(groupCt > tree[level][node].childCount) {
+					printf("Some children were over added!\n");
+				}
 			}
 		}
 	}
@@ -334,6 +343,10 @@ void traverseTree(size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, size_t 
 				nextLevel.clear();
 				
 				size_t startOfs = currentLevel.size();
+				if(spam){
+					printf("%lu.%lu has %ld @ %lu\n",groupI,particleI, startOfs,	curDepth);
+				}
+
 				while(startOfs > 0){
 					size_t toGrab = startOfs - 1;
 					//std::cout << "want to grab " << toGrab << " from " << curDepth << " this is " << startOfs << " - 1  = " << (startOfs - 1) << std::endl;
@@ -533,7 +546,7 @@ int main(int argc, char* argv[]) {
 		GroupInfo<DIM, Float, N_GROUP> groupHere = groups[k];
 		bool oops = false;
 		for(size_t i = groupHere.childStart; i < groupHere.childStart + groupHere.childCount; i++ ){
-			printf("%lu\t",i);
+			printf("%5lu\t",i);
 			Vec<DIM, Float> f;
 			Vec<DIM, Float> fV;
 			f = forces[i];
@@ -575,12 +588,56 @@ int main(int argc, char* argv[]) {
 		}
 
 		printf("reprocessing %lu (/ %lu) groups with problems\n",retakes.size(), groups.size());
-		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces, true>(1, retakes.data(), 1, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
+		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces, true>(3, retakes.data(), 1, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
+		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, CountOnly, false>(3, retakes.data(), 1, tree, node_counts, bodiesSorted, counts, SOFTENING, THETA);
+		traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, HashInteractions, false>(3, retakes.data(), 1, tree, node_counts, bodiesSorted, hashes, SOFTENING, THETA);
 		printf("------------\n");
 		printf("------------\n");
 		printf("------------\n");
-		traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces, true>(1, ria, 1, treeA, node_counts, nPs, pa, forcesVerify, SOFTENING, THETA, groups.size());
+		traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces, true>(1, ria, 1, treeA, node_counts, nPs, pa, forcesVerify, SOFTENING, THETA, retakes.size());
+		traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, CountOnly, false>(1, ria, 1, treeA, node_counts, nPs, pa, countsVerify, SOFTENING, THETA, retakes.size());
+		traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, HashInteractions, false>(1, ria, 1, treeA, node_counts, nPs, pa, hashesVerify, SOFTENING, THETA, retakes.size());
+		printf("------------\n");
+		printf("------------\n");
+		printf("------------\n");
+		printf("------------\n");
+		printf("------------\n");
+		printf("------------\n");
 
+		for(size_t k = 0; k < 3; k++){
+				GroupInfo<DIM, Float, N_GROUP> groupHere = retakes[k];
+				bool oops = false;
+				for(size_t i = groupHere.childStart; i < groupHere.childStart + groupHere.childCount; i++ ){
+					printf("%5lu\t",i);
+					Vec<DIM, Float> f;
+					Vec<DIM, Float> fV;
+					f = forces[i];
+					forcesVerify.get(i, fV);
+					for(size_t j = 0; j < DIM; j++){
+						printf("%f ",fabs(f.x[j] - fV.x[j]));
+					} printf("%f\t",mag(f - fV));
+
+					InteractionType(DIM, Float, CountOnly) c;
+					InteractionType(DIM, Float, CountOnly) cV;
+					c = counts[i];
+					countsVerify.get(i, cV);
+					for(size_t j = 0; j < InteractionElems(CountOnly, DIM, 2); j++){
+						printf("%lu %lu %ld\t",c.x[j],cV.x[j],c.x[j] - cV.x[j]);
+						oops |= (c.x[j] - cV.x[j]) != 0;
+					}
+
+					InteractionType(DIM, Float, HashInteractions) h;
+					InteractionType(DIM, Float, HashInteractions) hV;
+					h = hashes[i];
+					hashesVerify.get(i, hV);
+					for(size_t j = 0; j < InteractionElems(HashInteractions, DIM, 2); j++){
+						printf("%lx %lx %lx\t",h.x[j],hV.x[j],h.x[j] ^ hV.x[j]);
+						oops |= (h.x[j] ^ hV.x[j]) != 0;
+					}
+					printf("\n");
+				}
+				printf("\n");//if(oops) retakes.push_back(groupHere);
+			}
 
 
 		freeGroupInfoArray(ria);
