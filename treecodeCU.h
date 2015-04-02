@@ -11,8 +11,8 @@
 
 #include "treedefs.h"
 
-template<size_t DIM, typename Float, size_t threadCt, size_t PPG, size_t MAX_LEVELS, size_t MAX_STACK_ENTRIES, size_t INTERACTION_THRESHOLD, TraverseMode Mode, bool spam = false>
-void traverseTreeCUDA(size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo, size_t startDepth,
-					  NodeArray<DIM, Float> treeLevels[MAX_LEVELS], size_t treeCounts[MAX_LEVELS],
-					  size_t n, ParticleArray<DIM, Float> particles, InteractionTypeArray(DIM, Float, Mode) interactions, Float softening, Float theta, size_t blockCt);
+template<our_size_t DIM, typename Float, our_size_t threadCt, our_size_t PPG, our_size_t MAX_LEVELS, our_size_t MAX_STACK_ENTRIES, our_size_t INTERACTION_THRESHOLD, TraverseMode Mode, bool spam = false>
+void traverseTreeCUDA(our_size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupInfo, our_size_t startDepth,
+					  NodeArray<DIM, Float> treeLevels[MAX_LEVELS], our_size_t treeCounts[MAX_LEVELS],
+					  our_size_t n, ParticleArray<DIM, Float> particles, InteractionTypeArray(DIM, Float, Mode) interactions, Float softening, Float theta, our_size_t blockCt);
 #endif

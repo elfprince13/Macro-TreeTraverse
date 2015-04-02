@@ -16,25 +16,25 @@
 
 
 
-template<size_t DIM, typename Float> void allocVecArray(size_t width, VecArray<DIM, Float>& array){
-	for(size_t j = 0; j < DIM; j++){
+template<our_size_t DIM, typename Float> void allocVecArray(our_size_t width, VecArray<DIM, Float>& array){
+	for(our_size_t j = 0; j < DIM; j++){
 		array.x[j] = new Float[width];
 	}
 	array.setCapacity(width);
 	
 }
 
-template<size_t DIM, typename Float> void copyVecArray(size_t width, const VecArray<DIM, Float>& dst, const VecArray<DIM, Float>& src){
+template<our_size_t DIM, typename Float> void copyVecArray(our_size_t width, const VecArray<DIM, Float>& dst, const VecArray<DIM, Float>& src){
 	// We know how big the tree is now. Don't make extra space
-	size_t floatBytes = width*sizeof(Float);
-	for(size_t j = 0; j < DIM; j++){
+	our_size_t floatBytes = width*sizeof(Float);
+	for(our_size_t j = 0; j < DIM; j++){
 		memcpy(dst.x[j], src.x[j], floatBytes);
 	}
 }
 
 
-template<size_t DIM, typename Float> void freeVecArray(VecArray<DIM, Float>& array){
-	for(size_t j = 0; j < DIM; j++){
+template<our_size_t DIM, typename Float> void freeVecArray(VecArray<DIM, Float>& array){
+	for(our_size_t j = 0; j < DIM; j++){
 		delete [] array.x[j];
 	}
 }
@@ -42,12 +42,12 @@ template<size_t DIM, typename Float> void freeVecArray(VecArray<DIM, Float>& arr
 //---------------------------------------------------
 //---------------------------------------------------
 
-template<size_t DIM, typename Float> void allocNodeArray(size_t width, NodeArray<DIM, Float>& level){
+template<our_size_t DIM, typename Float> void allocNodeArray(our_size_t width, NodeArray<DIM, Float>& level){
 	
 	// We know how big the tree is now. Don't make extra space
 	level.isLeaf = new bool[width];
-	level.childCount = new size_t[width];
-	level.childStart = new size_t[width];
+	level.childCount = new our_size_t[width];
+	level.childStart = new our_size_t[width];
 	
 	allocVecArray(width, level.minX);
 	allocVecArray(width, level.maxX);
@@ -57,17 +57,17 @@ template<size_t DIM, typename Float> void allocNodeArray(size_t width, NodeArray
 	level.setCapacity(width);
 }
 
-template<size_t DIM, typename Float> void copyNodeArray(size_t width, NodeArray<DIM, Float>& level, const NodeArray<DIM, Float>& src){
+template<our_size_t DIM, typename Float> void copyNodeArray(our_size_t width, NodeArray<DIM, Float>& level, const NodeArray<DIM, Float>& src){
 	
 	// We know how big the tree is now. Don't make extra space
 	memcpy(level.isLeaf, src.isLeaf, width*sizeof(bool));
-	size_t countBytes = width*sizeof(size_t);
+	our_size_t countBytes = width*sizeof(our_size_t);
 	memcpy(level.childCount, src.childCount, countBytes);
 	memcpy(level.childStart, src.childStart, countBytes);
 	
 	
 	
-	size_t floatBytes = width*sizeof(Float);
+	our_size_t floatBytes = width*sizeof(Float);
 	
 	copyVecArray(width, level.minX, src.minX);
 	copyVecArray(width, level.maxX, src.maxX);
@@ -78,7 +78,7 @@ template<size_t DIM, typename Float> void copyNodeArray(size_t width, NodeArray<
 }
 
 
-template<size_t DIM, typename Float> void freeNodeArray(NodeArray<DIM, Float>& array){
+template<our_size_t DIM, typename Float> void freeNodeArray(NodeArray<DIM, Float>& array){
 	delete [] array.isLeaf;
 	delete [] array.childCount;
 	delete [] array.childStart;
@@ -92,10 +92,10 @@ template<size_t DIM, typename Float> void freeNodeArray(NodeArray<DIM, Float>& a
 }
 
 
-template<size_t DIM, typename Float, size_t MAX_LEVELS>
-void duplicateArrayTree(NodeArray<DIM, Float> treeLevels[MAX_LEVELS], NodeArray<DIM, Float> placeHolderTree[MAX_LEVELS], size_t treeCounts[MAX_LEVELS]){
+template<our_size_t DIM, typename Float, our_size_t MAX_LEVELS>
+void duplicateArrayTree(NodeArray<DIM, Float> treeLevels[MAX_LEVELS], NodeArray<DIM, Float> placeHolderTree[MAX_LEVELS], our_size_t treeCounts[MAX_LEVELS]){
 	
-	for(size_t i = 0; i < MAX_LEVELS; i++){
+	for(our_size_t i = 0; i < MAX_LEVELS; i++){
 		NodeArray<DIM, Float> level;
 		
 		allocNodeArray(treeCounts[i], level);
@@ -105,10 +105,10 @@ void duplicateArrayTree(NodeArray<DIM, Float> treeLevels[MAX_LEVELS], NodeArray<
 	}
 }
 
-template<size_t DIM, typename Float, size_t MAX_LEVELS>
+template<our_size_t DIM, typename Float, our_size_t MAX_LEVELS>
 void freeArrayTree(NodeArray<DIM, Float> placeHolderTree[MAX_LEVELS]){
 	
-	for(size_t i = 0; i < MAX_LEVELS; i++){
+	for(our_size_t i = 0; i < MAX_LEVELS; i++){
 		freeNodeArray(placeHolderTree[i]);
 	}
 }
@@ -119,7 +119,7 @@ void freeArrayTree(NodeArray<DIM, Float> placeHolderTree[MAX_LEVELS]){
 
 
 
-template<size_t DIM, typename Float> void allocPointMassArray(size_t width, PointMassArray<DIM, Float>& masses){
+template<our_size_t DIM, typename Float> void allocPointMassArray(our_size_t width, PointMassArray<DIM, Float>& masses){
 	
 	allocVecArray(width, masses.pos);
 	masses.m = new Float[width];
@@ -127,17 +127,17 @@ template<size_t DIM, typename Float> void allocPointMassArray(size_t width, Poin
 	
 }
 
-template<size_t DIM, typename Float> void copyPointMassArray(size_t width, PointMassArray<DIM, Float>& dst, const PointMassArray<DIM, Float>& src){
+template<our_size_t DIM, typename Float> void copyPointMassArray(our_size_t width, PointMassArray<DIM, Float>& dst, const PointMassArray<DIM, Float>& src){
 	
 	// We know how big the tree is now. Don't make extra space
-	size_t floatBytes = width*sizeof(Float);
+	our_size_t floatBytes = width*sizeof(Float);
 	copyVecArray(width, src.pos, dst.pos);
 	memcpy(dst.m, src.m, floatBytes);
 	
 }
 
 
-template<size_t DIM, typename Float> void freePointMassArray(PointMassArray<DIM, Float>& array){
+template<our_size_t DIM, typename Float> void freePointMassArray(PointMassArray<DIM, Float>& array){
 	freeVecArray(array.pos);
 	delete [] array.m;
 }
@@ -147,7 +147,7 @@ template<size_t DIM, typename Float> void freePointMassArray(PointMassArray<DIM,
 
 
 
-template<size_t DIM, typename Float> void allocParticleArray(size_t width, ParticleArray<DIM, Float>& particles){
+template<our_size_t DIM, typename Float> void allocParticleArray(our_size_t width, ParticleArray<DIM, Float>& particles){
 	
 	allocPointMassArray(width, particles.mass);
 	allocVecArray(width, particles.vel);
@@ -155,7 +155,7 @@ template<size_t DIM, typename Float> void allocParticleArray(size_t width, Parti
 	
 }
 
-template<size_t DIM, typename Float> void copyParticleArray(size_t width, ParticleArray<DIM, Float>& dst, const ParticleArray<DIM, Float>& src){
+template<our_size_t DIM, typename Float> void copyParticleArray(our_size_t width, ParticleArray<DIM, Float>& dst, const ParticleArray<DIM, Float>& src){
 	
 	// We know how big the tree is now. Don't make extra space
 	copyPointMassArray(width, src.mass, dst.mass);
@@ -164,7 +164,7 @@ template<size_t DIM, typename Float> void copyParticleArray(size_t width, Partic
 }
 
 
-template<size_t DIM, typename Float> void freeParticleArray(ParticleArray<DIM, Float>& array){
+template<our_size_t DIM, typename Float> void freeParticleArray(ParticleArray<DIM, Float>& array){
 	freePointMassArray(array.mass);
 	freeVecArray(array.vel);
 }
@@ -174,10 +174,10 @@ template<size_t DIM, typename Float> void freeParticleArray(ParticleArray<DIM, F
 
 
 
-template<size_t DIM, typename Float, size_t MAX_PARTS> void allocGroupInfoArray(size_t width, GroupInfoArray<DIM, Float, MAX_PARTS>& group){
+template<our_size_t DIM, typename Float, our_size_t MAX_PARTS> void allocGroupInfoArray(our_size_t width, GroupInfoArray<DIM, Float, MAX_PARTS>& group){
 	
-	group.childCount = new size_t[width];
-	group.childStart = new size_t[width];
+	group.childCount = new our_size_t[width];
+	group.childStart = new our_size_t[width];
 	
 	allocVecArray(width, group.minX);
 	allocVecArray(width, group.maxX);
@@ -187,15 +187,15 @@ template<size_t DIM, typename Float, size_t MAX_PARTS> void allocGroupInfoArray(
 	group.setCapacity(width);
 }
 
-template<size_t DIM, typename Float, size_t MAX_PARTS> void copyGroupInfoArray(size_t width, GroupInfoArray<DIM, Float, MAX_PARTS>& dst, const GroupInfoArray<DIM, Float, MAX_PARTS>& src){
+template<our_size_t DIM, typename Float, our_size_t MAX_PARTS> void copyGroupInfoArray(our_size_t width, GroupInfoArray<DIM, Float, MAX_PARTS>& dst, const GroupInfoArray<DIM, Float, MAX_PARTS>& src){
 	
 	// We know how big the tree is now. Don't make extra space
-	size_t countBytes = width*sizeof(size_t);
+	our_size_t countBytes = width*sizeof(our_size_t);
 	memcpy(dst.childCount, src.childCount, countBytes);
 	memcpy(dst.childStart, src.childStart, countBytes);
 	
 	
-	size_t floatBytes = width*sizeof(Float);
+	our_size_t floatBytes = width*sizeof(Float);
 	copyVecArray(width, src.minX, dst.minX);
 	copyVecArray(width, src.maxX, dst.maxX);
 	copyVecArray(width, src.center, dst.center);
@@ -205,7 +205,7 @@ template<size_t DIM, typename Float, size_t MAX_PARTS> void copyGroupInfoArray(s
 }
 
 
-template<size_t DIM, typename Float, size_t MAX_PARTS> void freeGroupInfoArray(GroupInfoArray<DIM, Float, MAX_PARTS>& array){
+template<our_size_t DIM, typename Float, our_size_t MAX_PARTS> void freeGroupInfoArray(GroupInfoArray<DIM, Float, MAX_PARTS>& array){
 	
 	delete [] array.childCount;
 	delete [] array.childStart;
@@ -219,10 +219,10 @@ template<size_t DIM, typename Float, size_t MAX_PARTS> void freeGroupInfoArray(G
 
 
 // VecArray must be preallocated
-template<size_t DIM, typename Float>
+template<our_size_t DIM, typename Float>
 VecArray<DIM, Float> pArrayFromPVec(const std::vector< Particle<DIM, Float> >& vec, ParticleArray<DIM, Float> array){
 	
-	for(size_t i = 0; i < vec.size(); i++){
+	for(our_size_t i = 0; i < vec.size(); i++){
 		array[i] = vec[i];
 	}
 	
