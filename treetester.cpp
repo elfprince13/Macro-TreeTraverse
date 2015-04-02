@@ -539,7 +539,7 @@ int main(int argc, char* argv[]) {
 	}
 	
 	printf("GPU forces =========>\n");
-	traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces, true>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, forcesVerify, SOFTENING, THETA, groups.size());
+	traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, Forces>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, forcesVerify, SOFTENING, THETA, groups.size());
 	return 0;
 	printf("GPU counts =========>\n");
 	traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, CountOnly>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, countsVerify, SOFTENING, THETA, groups.size());

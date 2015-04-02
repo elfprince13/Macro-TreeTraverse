@@ -100,18 +100,11 @@ template<our_size_t DIM, typename Float, TraverseMode Mode, bool spam = false> _
 }
 
 template<typename T> __device__ inline void swap(T &a, T &b){
-	if(threadIdx.x == 0) printf("%s begun\n",__func__);
-	T c(a);
-	if(threadIdx.x == 0){
-		printf("%s inited c(a)\n",__func__);
-	}
-	a=b;
-	if(threadIdx.x == 0) printf("%s inited a=b\n",__func__);
-	b=c;
-	if(threadIdx.x == 0) printf("%s inited b=c\n",__func__);
+	T c(a);	a=b;	b=c;
 }
 
 template<our_size_t DIM, typename T> __device__ inline void dumpNodeArrayContents(const char *name, const NodeArray<DIM, T> &n){
+	ASSERT_DEAD_CODE;
 	printf("%s : %p %p %p %p " SZSTR "\n",name, n.isLeaf, n.childCount, n.childStart, n.radius, n.elems);
 	for(our_size_t i = 0; i < DIM; i++){
 		printf("%p ",n.minX.x[i]);
@@ -124,33 +117,6 @@ template<our_size_t DIM, typename T> __device__ inline void dumpNodeArrayContent
 	}printf("%p\n",n.barycenter.m);
 	printf("%s - Dump complete\n",name);
 }
-//*
-template<> __device__ inline void swap<NodeArray<3, float> >(NodeArray<3, float> &a, NodeArray<3, float> &b){
-	if(threadIdx.x == 0){
-		printf("%s begun\n",__func__);
-		dumpNodeArrayContents("a0",a);
-		dumpNodeArrayContents("b0",b);
-	}
-	__syncthreads();
-	NodeArray<3, float> c(a);
-	if(threadIdx.x == 0){
-		printf("%s inited c(a)\n",__func__);
-		dumpNodeArrayContents("a1",a);
-		dumpNodeArrayContents("b1",b);
-		dumpNodeArrayContents("c1",c);
-		printf("%p %p %p\n",&a, &b, &c);
-
-	}
-	__syncthreads();
-	a=b;
-	if(threadIdx.x == 0) printf("%s inited a=b\n",__func__);
-	__syncthreads();
-	b=c;
-	if(threadIdx.x == 0) printf("%s inited b=c\n",__func__);
-	__syncthreads();
-}
-//*/
-
 
 
 template<our_size_t DIM, typename Float, our_size_t TPB, our_size_t PPG, our_size_t MAX_LEVELS, our_size_t INTERACTION_THRESHOLD, TraverseMode Mode, bool spam>
@@ -225,6 +191,7 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 		while(*cLCt != 0 ){
 			if(threadIdx.x == 0){
 				*nLCt = 0;
+				printf("%d+" SZSTR " Traversing level " SZSTR "\n",blockIdx.x,groupOffset,curDepth);
 			}
 			
 			__threadfence_block();
@@ -340,28 +307,13 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 				}
 				//*/
 
-				if(threadIdx.x == 0) printf("%3d.%d: Try going around again\n",blockIdx.x,threadIdx.x);
+				//if(threadIdx.x == 0) printf("%3d.%d: Try going around again\n",blockIdx.x,threadIdx.x);
 				startOfs -= blockDim.x;
 			}
 			
-			if(threadIdx.x == 0) printf("%3d.%d Done inside: " SZSTR " (loopcount at " DFSTR ") work remaining at depth: " SZSTR "\n",blockIdx.x, threadIdx.x, *nLCt,startOfs,curDepth);
-			if(threadIdx.x == 0){
-				printf("Cur elems: " SZSTR "\n",currentLevel.elems);
-				printf("Next elems: " SZSTR "\n",nextLevel.elems);
-
-				printf("Cur elems: " SZSTR "\n",currentLevel.elems);
-				dumpNodeArrayContents("cur0",currentLevel);
-
-				printf("Next elems: " SZSTR "\n",nextLevel.elems);
-				dumpNodeArrayContents("nex0",nextLevel);
-			}
-			__syncthreads();
+			//if(threadIdx.x == 0) printf("%3d.%d Done inside: " SZSTR " (loopcount at " DFSTR ") work remaining at depth: " SZSTR "\n",blockIdx.x, threadIdx.x, *nLCt,startOfs,curDepth);
 			swap<NodeArray<DIM, Float>>(currentLevel, nextLevel);
-			__syncthreads();
-			if(threadIdx.x == 0) printf("Swap 1 successful\n");
-			return;
 			swap<our_size_t*>(cLCt, nLCt);
-			if(threadIdx.x == 0) printf("Swap 2 successful\n");
 			curDepth += 1;
 		}
 		
@@ -395,7 +347,6 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 		if(threadIdx.x < useful_thread_ct){
 			interactionScratch.set(threadIdx.x, interaction);
 		}
-		printf("Remainder processed\n");
 
 		__threadfence_block();
 		__syncthreads(); // All forces have been summed and are in view

@@ -126,19 +126,9 @@ template <our_size_t DIM, typename T> struct VecArray{
 	}
 
 	UNIVERSAL_STORAGE VecArray<DIM, T>(const VecArray<DIM, T>& copy) : elems(copy.elems) {
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Copying elems in %s\n",__func__);
-		}
-#endif
 		for(our_size_t i = 0; i < DIM; i++){
 			x[i] = copy.x[i];
 		}
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Done copying elems in %s\n",__func__);
-		}
-#endif
 	}
 
 	UNIVERSAL_STORAGE VecArray<DIM, T>(Vec<DIM, T>& n){
@@ -179,11 +169,6 @@ template <our_size_t DIM, typename T> struct VecArray{
 	}
 
 	UNIVERSAL_STORAGE inline VecArray<DIM, T>& operator=(const VecArray<DIM, T> &n){
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Assigning vecs in %s\n",__func__);
-		}
-#endif
 		for(our_size_t i = 0; i < DIM; i++){
 			x[i] = n.x[i];
 		}
@@ -259,11 +244,6 @@ template<our_size_t DIM, typename T, our_size_t MAX_PARTS> struct GroupInfoArray
 	UNIVERSAL_STORAGE GroupInfoArray<DIM, T, MAX_PARTS>(const GroupInfoArray<DIM, T, MAX_PARTS>& copy) :
 			childCount(copy.childCount), childStart(copy.childStart),
 			minX(copy.minX), maxX(copy.maxX), center(copy.center), radius(copy.radius), elems(copy.elems) {
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Copying groupinfos in %s\n",__func__);
-		}
-#endif
 	}
 
 	UNIVERSAL_STORAGE GroupInfoArray<DIM, T, MAX_PARTS>(GroupInfo<DIM, T, MAX_PARTS>& g){
@@ -320,11 +300,6 @@ template<our_size_t DIM, typename T, our_size_t MAX_PARTS> struct GroupInfoArray
 	}
 	
 	UNIVERSAL_STORAGE inline GroupInfoArray<DIM, T, MAX_PARTS>& operator=(const GroupInfoArray<DIM, T, MAX_PARTS> &n){
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Assigning groupinfo in %s\n",__func__);
-		}
-#endif
 		childCount = (n.childCount);
 		childStart = (n.childStart);
 
@@ -372,11 +347,7 @@ template<our_size_t DIM, typename T> struct PointMassArray{
 	
 	UNIVERSAL_STORAGE PointMassArray<DIM, T>(const PointMassArray<DIM, T>& copy) :
 			pos(copy.pos), m(copy.m), elems(copy.elems) {
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Copying pointmasses in %s\n",__func__);
-		}
-#endif
+
 	}
 
 	UNIVERSAL_STORAGE PointMassArray<DIM, T>(PointMass<DIM, T>& p){
@@ -414,11 +385,6 @@ template<our_size_t DIM, typename T> struct PointMassArray{
 	}
 	
 	UNIVERSAL_STORAGE inline PointMassArray<DIM, T>& operator=(const PointMassArray<DIM, T> &n){
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Assigning pointmasses in %s\n",__func__);
-		}
-#endif
 		pos = (n.pos);
 		m = (n.m);
 		elems = (n.elems);
@@ -463,11 +429,6 @@ template<our_size_t DIM, typename T> struct NodeArray{
 	UNIVERSAL_STORAGE NodeArray<DIM, T>(const NodeArray<DIM, T>& copy) :
 			isLeaf(copy.isLeaf), childCount(copy.childCount), childStart(copy.childStart),
 			minX(copy.minX), maxX(copy.maxX), barycenter(copy.barycenter), radius(copy.radius), elems(copy.elems) {
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Copying nodes in %s\n",__func__);
-		}
-#endif
 	}
 
 	UNIVERSAL_STORAGE NodeArray<DIM, T>(Node<DIM, T>& n){
@@ -529,11 +490,6 @@ template<our_size_t DIM, typename T> struct NodeArray{
 	}
 	
 	UNIVERSAL_STORAGE inline NodeArray<DIM, T>& operator=(const NodeArray<DIM, T> &n){
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Assigning nodes in %s\n",__func__);
-		}
-#endif
 		isLeaf = (n.isLeaf);
 		childCount = (n.childCount);
 		childStart = (n.childStart);
@@ -566,11 +522,6 @@ template<our_size_t DIM, typename T> struct ParticleArray{
 	
 	UNIVERSAL_STORAGE ParticleArray<DIM, T>(const ParticleArray<DIM, T>& copy) :
 			mass(copy.mass), vel(copy.vel), elems(copy.elems) {
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Copying particles in %s\n",__func__);
-		}
-#endif
 	}
 
 	UNIVERSAL_STORAGE ParticleArray<DIM, T>(Particle<DIM, T>& p){
@@ -609,11 +560,6 @@ template<our_size_t DIM, typename T> struct ParticleArray{
 	}
 	
 	UNIVERSAL_STORAGE inline ParticleArray<DIM, T>& operator=(const ParticleArray<DIM, T> &n){
-#ifdef __CUDA_ARCH__
-		if(threadIdx.x == 0){
-			printf("Assigning particles in %s\n",__func__);
-		}
-#endif
 		mass = (n.mass);
 		vel = (n.vel);
 		elems = n.elems;
