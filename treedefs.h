@@ -421,6 +421,7 @@ template<our_size_t DIM, typename T> struct PointMassArray{
 #endif
 		pos = (n.pos);
 		m = (n.m);
+		elems = (n.elems);
 		return *this;
 	}
 

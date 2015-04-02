@@ -462,7 +462,7 @@ void traverseTreeCUDA(our_size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupI
 
 
 	const our_size_t stackCapacity = biggestRow;
-	const our_size_t blocksPerLaunch = 1;//MAX_STACK_ENTRIES / stackCapacity;
+	const our_size_t blocksPerLaunch = MAX_STACK_ENTRIES / stackCapacity;
 	std::cout << "Allowing: " << blocksPerLaunch << " blocks per launch" << std::endl;
 
 	NodeArray<DIM, Float> bfsStackBuffers;
@@ -486,11 +486,11 @@ void traverseTreeCUDA(our_size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupI
 	copyDeviceVecArray(n, cuInteractions, interactions, cudaMemcpyHostToDevice);
 	
 	dim3 dimGrid(blocksPerLaunch);
-	dim3 dimBlock(1);//threadCt);
+	dim3 dimBlock(threadCt);
 	std::cout << "Trying to launch with " << threadCt << " / block with " << blocksPerLaunch << " blocks" << std::endl;
 	
 	tic;
-	traverseTreeKernel<DIM, Float, 1/*threadCt*/, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode, spam><<<dimGrid, dimBlock>>>(nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, n, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
+	traverseTreeKernel<DIM, Float, threadCt, PPG, MAX_LEVELS, INTERACTION_THRESHOLD, Mode, spam><<<dimGrid, dimBlock>>>(nGroups, cuGroupInfo, startDepth, cuTreeLevels, cuTreeCounts, n, cuParticles, cuInteractions, softening, theta, bfsStackCounters, bfsStackBuffers, stackCapacity);
 	toc;
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
