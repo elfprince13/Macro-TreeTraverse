@@ -418,8 +418,8 @@ void traverseTree(our_size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, our
 #define MAX_LEVELS 16
 #define NODE_THRESHOLD 16
 #define N_GROUP 16
-#define TPPB 512
-#define INTERACTION_THRESHOLD 16 //(TPPB / N_GROUP)
+#define TPPB 256
+#define INTERACTION_THRESHOLD (TPPB / N_GROUP)
 #define MAX_STACK_ENTRIES 300000
 
 int main(int argc, char* argv[]) {
@@ -481,11 +481,11 @@ int main(int argc, char* argv[]) {
 	//*
 	//for(int i = 0; i < 10; i++){
 	printf("CPU forces =========>\n");
-	traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(groups.size(), groups.data(), 1, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
+	traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, Forces>(1/*groups.size()*/, groups.data(), 1, tree, node_counts, bodiesSorted, forces, SOFTENING, THETA);
 	printf("CPU counts =========>\n");
-	traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, CountOnly>(groups.size(), groups.data(), 1, tree, node_counts, bodiesSorted, counts, SOFTENING, THETA);
+	traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, CountOnly>(1/*groups.size()*/, groups.data(), 1, tree, node_counts, bodiesSorted, counts, SOFTENING, THETA);
 	printf("CPU hashes =========>\n");
-	traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, HashInteractions>(groups.size(), groups.data(), 1, tree, node_counts, bodiesSorted, hashes, SOFTENING, THETA);
+	traverseTree<DIM, Float, N_GROUP, MAX_LEVELS, HashInteractions>(1/*groups.size()*/, groups.data(), 1, tree, node_counts, bodiesSorted, hashes, SOFTENING, THETA);
 				/*
 		integrate_system<DIM, Float>(nPs, bodiesSorted, forces, DT);
 		Float e_now = sys_energy<DIM, Float>(nPs, bodiesSorted);
@@ -547,7 +547,7 @@ int main(int argc, char* argv[]) {
 	traverseTreeCUDA<DIM, Float, TPPB, N_GROUP, MAX_LEVELS, MAX_STACK_ENTRIES, INTERACTION_THRESHOLD, HashInteractions>(groups.size(), gia, 1, treeA, node_counts, nPs, pa, hashesVerify, SOFTENING, THETA, groups.size());
 	
 	InteractionType(DIM, Float, CountOnly) totals = freshInteraction<DIM, Float, CountOnly>();
-	for(our_size_t k = 0; k < groups.size(); k++){
+	for(our_size_t k = 0; k < 1/*groups.size()*/; k++){
 		GroupInfo<DIM, Float, N_GROUP> groupHere = groups[k];
 		bool oops = false;
 		for(our_size_t i = groupHere.childStart; i < groupHere.childStart + groupHere.childCount; i++ ){
