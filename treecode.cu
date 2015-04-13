@@ -7,7 +7,7 @@
 
 //: We should really be using native CUDA vectors for this.... but that requires more funny typing magic to convert the CPU data
 
-template<our_size_t DIM, typename Float, our_size_t PPG> __device__ inline bool passesMAC(const GroupInfo<DIM, Float, PPG>& groupInfo, const Node<DIM, Float>& nodeHere, Float theta) {
+template<our_size_t DIM, typename Float, our_size_t PPG> __device__ /*inline*/ bool passesMAC(const GroupInfo<DIM, Float, PPG>& groupInfo, const Node<DIM, Float>& nodeHere, Float theta) {
 	
 	Float d = mag(groupInfo.center - nodeHere.barycenter.pos) - groupInfo.radius;
 	Float l = 2 * nodeHere.radius;
@@ -17,7 +17,7 @@ template<our_size_t DIM, typename Float, our_size_t PPG> __device__ inline bool 
 
 
 template<template<our_size_t, typename> class ElemType, template<our_size_t, typename> class ElemTypeArray, our_size_t DIM, typename Float>
-__device__ inline void initStack(ElemTypeArray<DIM, Float> level, our_size_t levelCt, ElemTypeArray<DIM, Float> stack, our_size_t* stackCt){
+__device__ /*inline*/ void initStack(ElemTypeArray<DIM, Float> level, our_size_t levelCt, ElemTypeArray<DIM, Float> stack, our_size_t* stackCt){
 	if(threadIdx.x < levelCt){
 		if(levelCt > level.elems || threadIdx.x >= stack.elems) printf("%d.%d %s: " SZSTR " (should be <= " SZSTR ") elements. stackCt @ %d / " SZSTR "\n",blockIdx.x, threadIdx.x, __func__,levelCt,level.elems,threadIdx.x,stack.elems);
 
@@ -39,7 +39,7 @@ __device__ void dumpStackChildren(NodeArray<DIM, Float> stack, const our_size_t*
 }
 
 template<our_size_t DIM, typename T>
-__device__ inline void pushMeta(const our_size_t srcSt, const our_size_t srcCt, PointMassArray<DIM, T> stack, our_size_t* stackCt){
+__device__ /*inline*/ void pushMeta(const our_size_t srcSt, const our_size_t srcCt, PointMassArray<DIM, T> stack, our_size_t* stackCt){
 	// This is a weird compiler bug. There's no reason this shouldn't have worked without the cast.
 	our_size_t dst = atomicAdd((cu_size_t*)stackCt, (cu_size_t)srcCt);
 	for(our_size_t i = dst, j = 0; i < dst + srcCt; i++, j++){
@@ -53,7 +53,7 @@ __device__ inline void pushMeta(const our_size_t srcSt, const our_size_t srcCt, 
 }
 
 template<template<our_size_t, typename> class ElemType, template<our_size_t, typename> class ElemTypeArray, our_size_t DIM, typename Float>
-__device__ inline void pushAll(const ElemTypeArray<DIM, Float> src, const our_size_t srcCt, ElemTypeArray<DIM, Float> stack, our_size_t* stackCt){
+__device__ /*inline*/ void pushAll(const ElemTypeArray<DIM, Float> src, const our_size_t srcCt, ElemTypeArray<DIM, Float> stack, our_size_t* stackCt){
 	// This is a weird compiler bug. There's no reason this shouldn't have worked without the cast.
 	our_size_t dst = atomicAdd((cu_size_t*)stackCt, (cu_size_t)srcCt);
 	if(srcCt > src.elems || dst >= stack.elems)  printf("%d.%d %s: " SZSTR " (should be <= " SZSTR ") elements. stackCt @ " SZSTR " / " SZSTR "\n",blockIdx.x, threadIdx.x, __func__, srcCt,src.elems,dst,stack.elems);
@@ -65,7 +65,7 @@ __device__ inline void pushAll(const ElemTypeArray<DIM, Float> src, const our_si
 }
 
 template<our_size_t DIM, typename Float, TraverseMode Mode>
-__device__ inline InteractionType(DIM, Float, Mode) freshInteraction(){
+__device__ /*inline*/ InteractionType(DIM, Float, Mode) freshInteraction(){
 	InteractionType(DIM, Float, Mode) fresh; for(our_size_t i = 0; i < DIM; i++){
 		fresh.x[i] = 0.0;
 	}
@@ -75,7 +75,7 @@ __device__ inline InteractionType(DIM, Float, Mode) freshInteraction(){
 // Needs softening
 
 template<our_size_t DIM, typename Float, TraverseMode Mode, bool spam = false>
-__device__ inline InteractionType(DIM, Float, Mode) calc_interaction(const PointMass<DIM, Float> &m1, const InteracterType(DIM, Float, Mode) &m2, Float softening){
+__device__ /*inline*/ InteractionType(DIM, Float, Mode) calc_interaction(const PointMass<DIM, Float> &m1, const InteracterType(DIM, Float, Mode) &m2, Float softening){
 	InteractionType(DIM, Float, Mode) interaction = freshInteraction<DIM, Float, Mode>();
 	our_size_t isParticle = m2.m != 0;
 	switch(Mode){
@@ -105,12 +105,12 @@ __device__ inline InteractionType(DIM, Float, Mode) calc_interaction(const Point
 }
 
 template<typename T>
-__device__ inline void swap(T &a, T &b){
+__device__ /*inline*/ void swap(T &a, T &b){
 	T c(a);	a=b;	b=c;
 }
 
 template<our_size_t DIM, typename T>
-__device__ inline void dumpNodeArrayContents(const char *name, const NodeArray<DIM, T> &n){
+__device__ /*inline*/ void dumpNodeArrayContents(const char *name, const NodeArray<DIM, T> &n){
 	ASSERT_DEAD_CODE;
 	printf("%s : %p %p %p %p " SZSTR "\n",name, n.isLeaf, n.childCount, n.childStart, n.radius, n.elems);
 	for(our_size_t i = 0; i < DIM; i++){
@@ -131,7 +131,10 @@ __global__ void traverseTreeKernel(const our_size_t nGroups, const GroupInfoArra
 								   const our_size_t startDepth, NodeArray<DIM, Float>* treeLevels, const our_size_t* treeCounts,
 								   const our_size_t n, const ParticleArray<DIM, Float> particles, InteractionTypeArray(DIM, Float, Mode) interactions,
 								   const Float softening, const Float theta,
-								   our_size_t *bfsStackCounters, NodeArray<DIM, Float> bfsStackBuffers, const our_size_t stackCapacity) {
+								   our_size_t *const bfsStackCounters, const NodeArray<DIM, Float> bfsStackBuffers, const our_size_t stackCapacity) {
+									   //this function processes groups of stars against nodes in the tree
+									   //start at startDepth instead of root, to save a few levels
+									   //groupInfo describes particles via offsets into the overall ParticleArray; everything is in principle tree-sorted before we start
 typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::type InteractionElemType;
 #define BUF_MUL 128
 	// TPB must = blockDims.x
@@ -144,39 +147,40 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 		printf("%d Launched with mismatched TPB parameters\n",blockIdx.x);
 	}
 
-	InteracterTypeArray(DIM, Float, Mode) interactionList;
+	InteracterTypeArray(DIM, Float, Mode) interactionList; // This should be const, but we need a compile time array initializer first
 	interactionList.m = pointMass;
-	for(our_size_t j = 0; j < DIM; j++){
+	for(our_size_t j = 0; j < DIM; j++){ // this should unroll, 2 int-ops, and a store (hopefully to registers) * DIM (=3)
 		interactionList.pos.x[j] = pointPos + (j * BUF_MUL*INTERACTION_THRESHOLD);
 	}
 	interactionList.setCapacity(BUF_MUL*INTERACTION_THRESHOLD);
 	
-	InteractionTypeArray(DIM, Float, Mode) interactionScratch;
+	InteractionTypeArray(DIM, Float, Mode) interactionScratch; // this should unroll, 2 int-ops, and a store (hopefully to registers) * DIM (=3)
 	for(our_size_t j = 0; j < InteractionElems(Mode, DIM, 2); j++){
 		interactionScratch.x[j] = interactionBuf + (TPB * j);
 	}
 	interactionScratch.setCapacity(TPB);
 
 	
-	for(our_size_t groupOffset = 0; groupOffset + blockIdx.x < nGroups; groupOffset += gridDim.x){
-		GroupInfo<DIM, Float, PPG> tgInfo;
-		groupInfo.get(blockIdx.x + groupOffset,tgInfo);
-		our_size_t threadsPerPart = blockDim.x / tgInfo.childCount;
+	for(our_size_t groupOffset = 0; groupOffset + blockIdx.x < nGroups; groupOffset += gridDim.x){//one group per block of threads
+		//GroupInfo has 12 elements: 10 floats - coordinates of bounding box and center of bounding sphere and its radius; 2 ints - start offset for children, number of children
+		GroupInfo<DIM, Float, PPG> tgInfo; // This should be const, but we need a compile time array initializer first
+		groupInfo.get(blockIdx.x + groupOffset,tgInfo); // This should be gridDims.x * (3 + 3 * DIM(=3)) reads from arguments (global memory?)
+		const our_size_t threadsPerPart = blockDim.x / tgInfo.childCount; // 1 int-op, this is probably okay to spill eventually (or use constant memory), since it's referenced rarely, and always accessed across threads
 		
 		
-		our_size_t* pGLCt = interactionCounters;
+		our_size_t* const pGLCt = interactionCounters;
 		InteracterTypeArray(DIM, Float, Mode) pGList = interactionList;
-		InteracterTypeArray(DIM, Float, Mode) dummyP;
-		initStack<PointMass,PointMassArray>(dummyP, 0, pGList, pGLCt);
+		const InteracterTypeArray(DIM, Float, Mode) dummyP;
+		initStack<PointMass,PointMassArray>(dummyP, 0, pGList, pGLCt); // This should result in one atomic write to shared memory per block
 		
 		our_size_t* cLCt = bfsStackCounters + 2 * blockIdx.x;
-		NodeArray<DIM, Float> currentLevel = bfsStackBuffers + 2 * blockIdx.x * stackCapacity;
+		NodeArray<DIM, Float> currentLevel = bfsStackBuffers + 2 * blockIdx.x * stackCapacity; // This should be gridDims.x * (3 + 3 * DIM(=3)) reads from arguments (global memory?), 3x that many int-ops
 		currentLevel.setCapacity(stackCapacity);
-		initStack<Node,NodeArray>(treeLevels[startDepth], treeCounts[startDepth], currentLevel, cLCt);
+		initStack<Node,NodeArray>(treeLevels[startDepth], treeCounts[startDepth], currentLevel, cLCt); // one atomic write to global memory per block, <2**startDepth writes, should coalesce
 		
 		
 		our_size_t* nLCt = bfsStackCounters + 2 * blockIdx.x + 1;
-		NodeArray<DIM, Float> nextLevel = bfsStackBuffers + (2 * blockIdx.x + 1) * stackCapacity;
+		NodeArray<DIM, Float> nextLevel = bfsStackBuffers + (2 * blockIdx.x + 1) * stackCapacity; // This should be gridDims.x * (3 + 3 * DIM(=3)) reads from arguments (global memory?), 4x that many int-ops
 		nextLevel.setCapacity(stackCapacity);
 
 		__threadfence_block();
@@ -190,30 +194,33 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 			if(tgInfo.childStart + (threadIdx.x % tgInfo.childCount) >= particles.elems){
 				printf("Getting particle, %d < " SZSTR ", so want at " SZSTR " + (%d %% " SZSTR ") = " SZSTR "\n",threadIdx.x,useful_thread_ct,tgInfo.childStart, threadIdx.x, tgInfo.childCount, tgInfo.childStart + (threadIdx.x % tgInfo.childCount));
 			}
-			particles.get(tgInfo.childStart + (threadIdx.x % tgInfo.childCount), particle);
+			particles.get(tgInfo.childStart + (threadIdx.x % tgInfo.childCount), particle); // (nearly) Every thread should perform 7 reads from arguments
 		}
 		
-		InteractionType(DIM, Float, Mode) interaction = freshInteraction<DIM, Float, Mode>();
+		InteractionType(DIM, Float, Mode) interaction = freshInteraction<DIM, Float, Mode>(); // Either 2 or 3 writes of 0, hopefully to registers, since we'll do a lot of math on these
 		our_size_t curDepth = startDepth;
-		while(*cLCt != 0 ){
+		while(*cLCt != 0 ){ // Maximum of MAX_LEVELS iterations, but could (and likely will) terminate early
+			//while current level count !=0 (each level, nodes can either do work, or increment a counter for amount of work 
+			// to be done at next level) [#outerloop]
 			if(threadIdx.x == 0){
 				*nLCt = 0;
-				//printf("%d+" SZSTR " Traversing level " SZSTR "\n",blockIdx.x,groupOffset,curDepth);
 			}
-			
+
 			__threadfence_block();
 			__syncthreads();
-			
+
 			cu_diff_t startOfs = *cLCt;
 			if(spam && threadIdx.x == 0){
 				printf("" SZSTR "." SZSTR " has " DFSTR " @ " SZSTR "\n",blockIdx.x + groupOffset,tgInfo.childStart + (threadIdx.x % tgInfo.childCount), startOfs,	curDepth);
 			}
 
-			while(startOfs > 0){
-				cu_diff_t toGrab = startOfs - blockDim.x + threadIdx.x;
+			while(startOfs > 0){//runs over stack for current level (whenever a parent defers work, it places it on the next-level-stack
+				//[#stacktraverse]
+				cu_diff_t toGrab = startOfs - blockDim.x + threadIdx.x; // two int-ops
 				if(toGrab >= 0){
-					Node<DIM, Float> nodeHere;
-					currentLevel.get(toGrab, nodeHere);
+					Node<DIM, Float> nodeHere; 			// These should mostly coalesce. At most one extra?
+					currentLevel.get(toGrab, nodeHere);	// 4 * 3*DIM reads per thread
+
 					//if(threadIdx.x == 0) printf("\t%d.%d @ " SZSTR ":\t" SZSTR " " SZSTR " vs " SZSTR " " SZSTR " with " SZSTR " " DFSTR " \n", blockIdx.x, threadIdx.x, curDepth, nodeHere.childStart, nodeHere.childCount, currentLevel.childStart[toGrab], currentLevel.childCount[toGrab], *cLCt, toGrab);
 					//*
 					if(spam){
@@ -222,64 +229,49 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 								tgInfo.childStart + (threadIdx.x % tgInfo.childCount),
 								curDepth,nodeHere.childStart,nodeHere.childCount,nodeHere.isLeaf,passesMAC<DIM, Float, PPG>(tgInfo, nodeHere, theta));
 					}
-					if(passesMAC(tgInfo, nodeHere, theta)){
+					if(passesMAC(tgInfo, nodeHere, theta)){ // 12ish floating-point ops
 						//if(threadIdx.x == 0) printf("\t%d accepted MAC\n",threadIdx.x);
-						if(INTERACTION_THRESHOLD > 0){
-							// Store to C/G list
-							//if(threadIdx.x == 0) printf("\t%d found the following:\n\t(" SZSTR " " SZSTR ") @ (%p/" SZSTR "), writing to stack at pos " SZSTR " @ %p\n", threadIdx.x, nodeHere.childStart, nodeHere.childCount, treeLevels[curDepth + 1].childStart, curDepth + 1, *nLCt,nLCt);
-							
-							InteracterType(DIM, Float, Mode) nodePush;
-							switch(Mode){
-							case Forces:{
-									nodePush = nodeHere.barycenter; break;}
-							case CountOnly:
-							case HashInteractions:{
-									nodePush.m = 0;
-									nodePush.pos.x[0] = curDepth;
-									nodePush.pos.x[1] = nodeHere.childStart;
-									nodePush.pos.x[2] = nodeHere.childCount;
-									break;}
-							}
-							InteracterTypeArray(DIM, Float, Mode) tmpArray(nodePush);
-							our_size_t tmpCt = 1;
-							
-							pushAll<PointMass,PointMassArray>(tmpArray, tmpCt, pGList, pGLCt);
-						} else if(threadIdx.x < tgInfo.childCount){
-							ASSERT_DEAD_CODE;
-							//interaction = interaction + calc_force(particle.m, particle.pos, nodeHere.mass, nodeHere.barycenter, softening);
+						//*
+						InteracterType(DIM, Float, Mode) nodePush;
+						switch(Mode){
+						case Forces:{
+								nodePush = nodeHere.barycenter; break;}
+						case CountOnly:
+						case HashInteractions:{
+								nodePush.m = 0;
+								nodePush.pos.x[0] = curDepth;
+								nodePush.pos.x[1] = nodeHere.childStart;
+								nodePush.pos.x[2] = nodeHere.childCount;
+								break;}
 						}
+						InteracterTypeArray(DIM, Float, Mode) tmpArray(nodePush); // Four assignments of pointer values
+						our_size_t tmpCt = 1;
+
+						pushAll<PointMass,PointMassArray>(tmpArray, tmpCt, pGList, pGLCt); // multiplied by number of passing nodes: atomic op, a sequence DIM+1 writes to shared memory. addresses accessed should be sequential
+						//*/
 					} else {
 						//if(threadIdx.x == 0) printf("\t%d rejected MAC\n",threadIdx.x);
 						if(nodeHere.isLeaf){
-							if(INTERACTION_THRESHOLD > 0){
-								// Store to P/G list
-								//printf("Pushing particles " SZSTR " particles, ")
-								if(spam) printf("" SZSTR "." SZSTR " leaf contains " SZSTR ":" SZSTR "\n",blockIdx.x + groupOffset, tgInfo.childStart + (threadIdx.x % tgInfo.childCount),nodeHere.childStart,nodeHere.childCount);
+						//*
+							if(spam) printf("" SZSTR "." SZSTR " leaf contains " SZSTR ":" SZSTR "\n",blockIdx.x + groupOffset, tgInfo.childStart + (threadIdx.x % tgInfo.childCount),nodeHere.childStart,nodeHere.childCount);
 
-								if(nodeHere.childCount > 16){
-									printf("\t%d.%d: Adding a lot particles " SZSTR "\n",blockIdx.x,threadIdx.x,nodeHere.childCount);
-								}
-								switch(Mode){
-								case Forces:{
-									pushAll<PointMass, PointMassArray>(particles.mass + nodeHere.childStart, nodeHere.childCount, *reinterpret_cast<PointMassArray<DIM, Float>* >(&pGList), pGLCt); break;}
-								case CountOnly:
-								case HashInteractions:{
-									pushMeta(nodeHere.childStart, nodeHere.childCount, pGList, pGLCt);
-									break;}
-								}
-
-							} else {
-								ASSERT_DEAD_CODE;
-								/*
-								 for(our_size_t pI = nodeHere.childCount; pI > 0; pI -= threadsPerPart ){
-									cu_diff_t toGrab = pI - threadsPerPart + (threadIdx.x / tgInfo.childCount);
-									if(toGrab >= 0){
-								 interaction = interaction + calc_force(particle.m, particle.pos, particles[nodeHere.childStart + toGrab].m, particles[nodeHere.childStart + toGrab].pos, softening);
-									}
-								 }
-								 */
+							if(nodeHere.childCount > 16){
+								printf("\t%d.%d: Adding a lot particles " SZSTR "\n",blockIdx.x,threadIdx.x,nodeHere.childCount);
 							}
+							switch(Mode){
+							case Forces:{
+								// multiplied by number of split leaves: atomic op, a sequence of DIM+1 * at most PPG writes to shared memory.
+								// These seem unlikely to be well-behaved
+								pushAll<PointMass, PointMassArray>(particles.mass + nodeHere.childStart, nodeHere.childCount, *reinterpret_cast<PointMassArray<DIM, Float>* >(&pGList), pGLCt); break;}
+							case CountOnly:
+							case HashInteractions:{
+								pushMeta(nodeHere.childStart, nodeHere.childCount, pGList, pGLCt);
+								break;}
+							}
+							//*/
 						} else {
+							// multiplied by number of split leaves: atomic op, a sequence of (4+3*DIM) * at most 2**DIM writes to shared memory.
+							// These seem unlikely to be well-behaved
 							pushAll<Node, NodeArray>(treeLevels[curDepth + 1] + nodeHere.childStart, nodeHere.childCount, nextLevel, nLCt);
 						}
 					}
@@ -288,7 +280,7 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 				__threadfence_block();
 				__syncthreads();
 				// if(threadIdx.x == 0) printf("\t%3d.%d All safely past toGrab\n",blockIdx.x,threadIdx.x);
-				
+
 				//*
 				if(INTERACTION_THRESHOLD > 0){ // Can't diverge, compile-time constant
 					cu_diff_t innerStartOfs = 0;
@@ -298,20 +290,19 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 					// The casting here feels very strange - why is innerStartOfs implicitly casted, rather than vice versa?
 					for(innerStartOfs = *pGLCt; innerStartOfs >= (cu_diff_t)INTERACTION_THRESHOLD; innerStartOfs -= threadsPerPart){
 						cu_diff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
-						/*
 						if(toGrab >= 0 && threadIdx.x < useful_thread_ct){
 							//if(toGrab % threadsPerPart == 0) printf("\t%d interacting with " DFSTR " = " SZSTR " - " SZSTR " + (%d / %d)\n",threadIdx.x,toGrab,innerStartOfs,threadsPerPart,threadIdx.x,tgInfo.childCount);
 							InteracterType(DIM, Float, Mode) pHere;
 							pGList.get(toGrab, pHere);
+							//  Something like 12-ish FLOPs
 							interaction = interaction + calc_interaction<DIM, Float, Mode, spam>(particle.mass, pHere, softening);
 						}
-						//*/
 					}
 					//if(threadIdx.x == 0) printf("\t%d through interaction loop safely\n",threadIdx.x);
 					// Need to update stack pointer
 					//*/
 					if(threadIdx.x == 0){
-						atomicExch((cu_size_t *)pGLCt, (cu_size_t)((innerStartOfs < 0) ? 0 : innerStartOfs));
+						atomicExch((cu_size_t *)pGLCt, 0);// (cu_size_t)((innerStartOfs < 0) ? 0 : innerStartOfs));
 					}
 				}
 				//*/
@@ -319,13 +310,14 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 				//if(threadIdx.x == 0) printf("%3d.%d: Try going around again\n",blockIdx.x,threadIdx.x);
 				startOfs -= blockDim.x;
 			}
-			
+
 			//if(threadIdx.x == 0) printf("%3d.%d Done inside: " SZSTR " (loopcount at " DFSTR ") work remaining at depth: " SZSTR "\n",blockIdx.x, threadIdx.x, *nLCt,startOfs,curDepth);
+			// It would be nice if this happened purely with registers.
 			swap<NodeArray<DIM, Float>>(currentLevel, nextLevel);
 			swap<our_size_t*>(cLCt, nLCt);
 			curDepth += 1;
 		}
-		
+
 		// Process remaining interactions
 		//*
 		__threadfence_block();
@@ -338,14 +330,14 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 
 			for(innerStartOfs = *pGLCt; innerStartOfs > 0; innerStartOfs -= threadsPerPart){
 				cu_diff_t toGrab = innerStartOfs - threadsPerPart + (threadIdx.x / tgInfo.childCount);
-				/*
 				if(toGrab >= 0 && threadIdx.x < useful_thread_ct){
 					//if(toGrab % threadsPerPart == 0) printf("\t%d interacting with " DFSTR " = " SZSTR " - " SZSTR " + (%d / %d)\n",threadIdx.x,toGrab,innerStartOfs,threadsPerPart,threadIdx.x,tgInfo.childCount);
 					InteracterType(DIM, Float, Mode) pHere;
 					pGList.get(toGrab, pHere);
+
+					//  Something like 16-ish FLOPs
 					interaction = interaction + calc_interaction<DIM, Float, Mode, spam>(particle.mass, pHere, softening);
 				}
-				//*/
 			}
 			//if(threadIdx.x == 0) printf("\t%d through final interaction loop safely\n",threadIdx.x);
 			//*/
@@ -371,6 +363,7 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 			for(our_size_t i = 1; i < threadsPerPart; i++){
 				InteractionType(DIM, Float, Mode) tmp;
 				interactionScratch.get(threadIdx.x + i * tgInfo.childCount, tmp);
+				// DIM FLOPs
 				accInt = accInt + tmp;
 			}
 			interactions.set(tgInfo.childStart + threadIdx.x, interaction + accInt);
@@ -379,7 +372,7 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 
 		//if(threadIdx.x == 0) printf("%3d Done reducing\n",blockIdx.x);
 		//*/
-		
+
 	}
 	return;
 	
@@ -475,8 +468,8 @@ void traverseTreeCUDA(our_size_t nGroups, GroupInfoArray<DIM, Float, PPG> groupI
 }
 
 
-template void traverseTreeCUDA<3, float, 256, 16, 16, 300000, 16, Forces, true>				(our_size_t, GroupInfoArray<3, float, 16>, our_size_t, NodeArray<3, float> *, our_size_t *, our_size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, Forces), float, float, our_size_t);
+//template void traverseTreeCUDA<3, float, 256, 16, 16, 300000, 16, Forces, true>				(our_size_t, GroupInfoArray<3, float, 16>, our_size_t, NodeArray<3, float> *, our_size_t *, our_size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, Forces), float, float, our_size_t);
 template void traverseTreeCUDA<3, float, 256, 16, 16, 300000, 16, Forces, false>				(our_size_t, GroupInfoArray<3, float, 16>, our_size_t, NodeArray<3, float> *, our_size_t *, our_size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, Forces), float, float, our_size_t);
-template void traverseTreeCUDA<3, float, 256, 16, 16, 300000, 16, CountOnly, false>			(our_size_t, GroupInfoArray<3, float, 16>, our_size_t, NodeArray<3, float> *, our_size_t *, our_size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, CountOnly), float, float, our_size_t);
-template void traverseTreeCUDA<3, float, 256, 16, 16, 300000, 16, HashInteractions, false>	(our_size_t, GroupInfoArray<3, float, 16>, our_size_t, NodeArray<3, float> *, our_size_t *, our_size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, HashInteractions), float, float, our_size_t);
+//template void traverseTreeCUDA<3, float, 256, 16, 16, 300000, 16, CountOnly, false>			(our_size_t, GroupInfoArray<3, float, 16>, our_size_t, NodeArray<3, float> *, our_size_t *, our_size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, CountOnly), float, float, our_size_t);
+//template void traverseTreeCUDA<3, float, 256, 16, 16, 300000, 16, HashInteractions, false>	(our_size_t, GroupInfoArray<3, float, 16>, our_size_t, NodeArray<3, float> *, our_size_t *, our_size_t, ParticleArray<3, float>, InteractionTypeArray(3, float, HashInteractions), float, float, our_size_t);
 
