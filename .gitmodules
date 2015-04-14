@@ -1,0 +1,3 @@
+[submodule "Templated-Array-Initializers"]
+	path = Templated-Array-Initializers
+	url = git@github.com:elfprince13/Templated-Array-Initializers.git

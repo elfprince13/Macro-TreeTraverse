@@ -7,16 +7,20 @@
 	<key>IDESourceControlProjectIdentifier</key>
 	<string>ADA99C74-A8AD-48CD-AF70-063AA7A4FDF2</string>
 	<key>IDESourceControlProjectName</key>
-	<string>TreeTraverse</string>
+	<string>project</string>
 	<key>IDESourceControlProjectOriginsDictionary</key>
 	<dict>
+		<key>6684E51C9C2856F89A134C4457E7DEF9E4A927FD</key>
+		<string>github.com:elfprince13/Templated-Array-Initializers.git</string>
 		<key>EA8D7528F85CB54CB3AB6F3BD6C1EBA1D847403A</key>
 		<string>https://github.com/elfprince13/Macro-TreeTraverse.git</string>
 	</dict>
 	<key>IDESourceControlProjectPath</key>
-	<string>TreeTraverse.xcodeproj</string>
+	<string>TreeTraverse.xcodeproj/project.xcworkspace</string>
 	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
 	<dict>
+		<key>6684E51C9C2856F89A134C4457E7DEF9E4A927FD</key>
+		<string>../..Templated-Array-Initializers/</string>
 		<key>EA8D7528F85CB54CB3AB6F3BD6C1EBA1D847403A</key>
 		<string>../..</string>
 	</dict>
@@ -28,6 +32,14 @@
 	<string>EA8D7528F85CB54CB3AB6F3BD6C1EBA1D847403A</string>
 	<key>IDESourceControlProjectWCConfigurations</key>
 	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>6684E51C9C2856F89A134C4457E7DEF9E4A927FD</string>
+			<key>IDESourceControlWCCName</key>
+			<string>Templated-Array-Initializers</string>
+		</dict>
 		<dict>
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>

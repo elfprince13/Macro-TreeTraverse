@@ -86,7 +86,7 @@ __device__ /*inline*/ InteractionType(DIM, Float, Mode) calc_interaction(const P
 		}
 		const PointMass<DIM, Float>& m2_inner = reinterpret_cast<const PointMass<DIM, Float>& >(m2);
 		Vec<DIM, Float> disp = m1.pos - m2_inner.pos;
-		interaction = (disp * ((m1.m * m2_inner.m) / (Float)(softening + pow((Float)mag_sq(disp),(Float)1.5))));
+		interaction = (disp * ((m1.m * m2_inner.m) / (Float)(softening + pow((Float)mag_sq(disp),(Float)1.5)))).template castContents<InteractionElems(Mode, DIM, 2) , typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::type>();
 		break;}
 	case CountOnly:
 		interaction.x[isParticle] = 1;
@@ -170,7 +170,7 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 		
 		our_size_t* const pGLCt = interactionCounters;
 		InteracterTypeArray(DIM, Float, Mode) pGList = interactionList;
-		const InteracterTypeArray(DIM, Float, Mode) dummyP;
+		InteracterTypeArray(DIM, Float, Mode) dummyP;
 		initStack<PointMass,PointMassArray>(dummyP, 0, pGList, pGLCt); // This should result in one atomic write to shared memory per block
 		
 		our_size_t* cLCt = bfsStackCounters + 2 * blockIdx.x;
@@ -235,7 +235,7 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 						InteracterType(DIM, Float, Mode) nodePush;
 						switch(Mode){
 						case Forces:{
-								nodePush = nodeHere.barycenter; break;}
+								nodePush = nodeHere.barycenter.template castContents<InteractionElems(Mode, DIM, 3) , typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::type>(); break;}
 						case CountOnly:
 						case HashInteractions:{
 								nodePush.m = 0;
@@ -244,7 +244,7 @@ typedef typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::t
 								nodePush.pos.x[2] = nodeHere.childCount;
 								break;}
 						}
-						InteracterTypeArray(DIM, Float, Mode) tmpArray(nodePush); // Four assignments of pointer values
+						InteracterTypeArray(DIM, Float, Mode) tmpArray = nodePush.toArray(); // Four assignments of pointer values
 						our_size_t tmpCt = 1;
 
 						pushAll<PointMass,PointMassArray>(tmpArray, tmpCt, pGList, pGLCt); // multiplied by number of passing nodes: atomic op, a sequence DIM+1 writes to shared memory. addresses accessed should be sequential

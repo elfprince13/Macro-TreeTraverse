@@ -366,7 +366,7 @@ void traverseTree(our_size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, our
 								update.x[0] = curDepth ^ nodeHere.childCount ^ nodeHere.childStart;
 								break;
 							case Forces:
-								update = calc_force<DIM, Float, spam>(particle.mass, nodeHere.barycenter, softening);
+								update = calc_force<DIM, Float, spam>(particle.mass, nodeHere.barycenter, softening).template castContents<InteractionElems(Mode, DIM, 2) , typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::type>();
 								break;
 						}
 						interaction = interaction + update;
@@ -383,7 +383,7 @@ void traverseTree(our_size_t nGroups, GroupInfo<DIM, Float, PPG>* groupInfo, our
 									case HashInteractions:
 										update.x[1] = childI; break;
 									case Forces:
-										update = calc_force<DIM, Float, spam>(particle.mass, particles[childI].mass, softening);
+										update = calc_force<DIM, Float, spam>(particle.mass, particles[childI].mass, softening).template castContents<InteractionElems(Mode, DIM, 2) , typename std::conditional<NonForceCondition(Mode), our_size_t, Float>::type>();
 										break;
 										
 								}

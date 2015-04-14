@@ -40,16 +40,9 @@ typedef ptrdiff_t cu_diff_t;
 
 #define ASSERT_DEAD_CODE //printf("%s @ %s:%d: Executing dead-code. Something is terribly broken\n",__func__, __FILE__, __LINE__)
 
-
+template <our_size_t DIM, typename T> struct VecArray;
 template<our_size_t DIM, typename T> struct Vec{
 	T x[DIM];
-
-	UNIVERSAL_STORAGE Vec<DIM, T>(){}
-	UNIVERSAL_STORAGE Vec<DIM, T>(const T a[DIM]){
-		for(our_size_t i = 0; i < DIM; i++){
-			x[i] = a[i];
-		}
-	}
 	
 	UNIVERSAL_STORAGE /*inline*/ Vec<DIM, T> operator -(const Vec<DIM, T> &v) const{
 		Vec<DIM, T> out;
@@ -106,14 +99,25 @@ template<our_size_t DIM, typename T> struct Vec{
 		}
 		return out;
 	}
-
+	
 	// This code should never run, but is necessary for type-correctness because we can't partially specialize function templates
-	template<our_size_t DIM2, typename T2> UNIVERSAL_STORAGE /*inline*/ Vec<DIM, T>& operator=(const Vec<DIM2, T2> &v) {
+	template<our_size_t DIM2, typename T2> UNIVERSAL_STORAGE /*inline*/ Vec<DIM2, T2> castContents() const {
 		ASSERT_DEAD_CODE;
-		for(our_size_t i = 0; i < DIM && i < DIM2; i++){
-			this->x[i] = static_cast<T>(v.x[i]);
+		Vec<DIM2, T2> copyTo;
+		for(our_size_t i = 0; i < (DIM > DIM2 ? DIM2 : DIM); i++){
+			copyTo.x[i] = static_cast<T2>(x[i]);
 		}
-		return *this;
+		return copyTo;
+	}
+
+
+	UNIVERSAL_STORAGE VecArray<DIM, T> toArray(){
+		VecArray<DIM, T> copyTo;
+		for(our_size_t i = 0; i < DIM; i++){
+			copyTo.x[i] = x + i;
+		}
+		//	copyTo.setCapacity(1);
+		return copyTo;
 	}
 };
 
@@ -121,22 +125,6 @@ template <our_size_t DIM, typename T> struct VecArray{
 	T *x[DIM];
 	our_size_t elems;
 	
-	UNIVERSAL_STORAGE VecArray<DIM, T>(){
-	//	setCapacity(0);
-	}
-
-	UNIVERSAL_STORAGE VecArray<DIM, T>(const VecArray<DIM, T>& copy) : elems(copy.elems) {
-		for(our_size_t i = 0; i < DIM; i++){
-			x[i] = copy.x[i];
-		}
-	}
-
-	UNIVERSAL_STORAGE VecArray<DIM, T>(Vec<DIM, T>& n){
-		for(our_size_t i = 0; i < DIM; i++){
-			x[i] = n.x+i;
-		}
-	//	setCapacity(1);
-	}
 	
 	UNIVERSAL_STORAGE /*inline*/ void setCapacity(our_size_t i){
 		elems = i;
@@ -166,14 +154,6 @@ template <our_size_t DIM, typename T> struct VecArray{
 		}
 		o.setCapacity(elems - i);
 		return o;
-	}
-
-	UNIVERSAL_STORAGE /*inline*/ VecArray<DIM, T>& operator=(const VecArray<DIM, T> &n){
-		for(our_size_t i = 0; i < DIM; i++){
-			x[i] = n.x[i];
-		}
-		elems = n.elems;
-		return *this;
 	}
 };
 
@@ -216,6 +196,7 @@ template<our_size_t DIM, typename T> UNIVERSAL_STORAGE T mag(const Vec<DIM, T> &
 	return (T) sqrt(mag_sq(v));
 }
 
+template <our_size_t DIM, typename T, our_size_t MAX_PARTS> struct GroupInfoArray;
 template<our_size_t DIM, typename T, our_size_t MAX_PARTS> struct GroupInfo{
 	our_size_t childCount;
 	our_size_t childStart;
@@ -223,6 +204,19 @@ template<our_size_t DIM, typename T, our_size_t MAX_PARTS> struct GroupInfo{
 	Vec<DIM, T> maxX;
 	Vec<DIM, T> center;
 	T radius;
+	
+	UNIVERSAL_STORAGE GroupInfoArray<DIM, T, MAX_PARTS> toArray(){
+		GroupInfoArray<DIM, T, MAX_PARTS> copyTo;
+		copyTo.childCount = &childCount;
+		copyTo.childStart = &childStart;
+		
+		copyTo.minX = minX.toArray();
+		copyTo.maxX = maxX.toArray();
+		copyTo.center = center.toArray();
+		copyTo.radius = &radius;
+		//	copyTo.setCapacity(1);
+		return copyTo;
+	}
 };
 
 template<our_size_t DIM, typename T, our_size_t MAX_PARTS> struct GroupInfoArray{
@@ -234,29 +228,6 @@ template<our_size_t DIM, typename T, our_size_t MAX_PARTS> struct GroupInfoArray
 	T *radius;
 	our_size_t elems; // We should suppress elems generation in production code, which means macroing up, or somesuch
 
-	UNIVERSAL_STORAGE GroupInfoArray<DIM, T, MAX_PARTS >() {
-	//	setCapacity(0);
-		childCount = nullptr;
-		childStart = nullptr;
-		radius = nullptr;
-	}
-
-	UNIVERSAL_STORAGE GroupInfoArray<DIM, T, MAX_PARTS>(const GroupInfoArray<DIM, T, MAX_PARTS>& copy) :
-			childCount(copy.childCount), childStart(copy.childStart),
-			minX(copy.minX), maxX(copy.maxX), center(copy.center), radius(copy.radius), elems(copy.elems) {
-	}
-
-	UNIVERSAL_STORAGE GroupInfoArray<DIM, T, MAX_PARTS>(GroupInfo<DIM, T, MAX_PARTS>& g){
-		childCount = &(g.childCount);
-		childStart = &(g.childStart);
-		
-		minX = VecArray<DIM, T>(g.minX);
-		maxX = VecArray<DIM, T>(g.maxX);
-		center = VecArray<DIM, T>(g.center);
-		radius = &(g.radius);
-	//	setCapacity(1);
-	}
-	
 	
 	UNIVERSAL_STORAGE /*inline*/ void setCapacity(our_size_t i){
 		elems = i;
@@ -299,32 +270,29 @@ template<our_size_t DIM, typename T, our_size_t MAX_PARTS> struct GroupInfoArray
 		return o;
 	}
 	
-	UNIVERSAL_STORAGE /*inline*/ GroupInfoArray<DIM, T, MAX_PARTS>& operator=(const GroupInfoArray<DIM, T, MAX_PARTS> &n){
-		childCount = (n.childCount);
-		childStart = (n.childStart);
-
-		minX = (n.minX);
-		maxX = (n.maxX);
-		center = (n.center);
-
-		radius = (n.radius);
-		elems = (n.elems);
-		return *this;
-	}
-
-	
 };
 
+template<our_size_t DIM, typename T> struct PointMassArray;
 template<our_size_t DIM, typename T> struct PointMass{
 	Vec<DIM, T> pos;
 	T m;
 
+	
+	UNIVERSAL_STORAGE PointMassArray<DIM, T> toArray(){
+		PointMassArray<DIM, T> copyTo;
+		copyTo.pos = pos.toArray();
+		copyTo.m = &m;
+		//	copyTo.setCapacity(1);
+		return copyTo;
+	}
+	
 	// This code should never run, but is necessary for type-correctness because we can't partially specialize function templates
-	template<our_size_t DIM2, typename T2> UNIVERSAL_STORAGE /*inline*/ PointMass<DIM, T>& operator=(const PointMass<DIM2, T2> &v) {
+	template<our_size_t DIM2, typename T2> UNIVERSAL_STORAGE /*inline*/ PointMass<DIM2, T2> castContents() const {
 		ASSERT_DEAD_CODE;
-		this->m = static_cast<T>(v.m);
-		this->pos = v.pos;
-		return *this;
+		PointMass<DIM2, T2> copyTo;
+		copyTo.m = static_cast<T2>(m);
+		copyTo.pos = pos.template castContents<DIM2, T2>();
+		return copyTo;
 	}
 
 	UNIVERSAL_STORAGE /*inline*/ void printContents() const {
@@ -339,22 +307,6 @@ template<our_size_t DIM, typename T> struct PointMassArray{
 	VecArray<DIM, T> pos;
 	T *m;
 	our_size_t elems;
-	
-	UNIVERSAL_STORAGE PointMassArray<DIM, T>(){
-	//	setCapacity(0);
-		m = nullptr;
-	}
-	
-	UNIVERSAL_STORAGE PointMassArray<DIM, T>(const PointMassArray<DIM, T>& copy) :
-			pos(copy.pos), m(copy.m), elems(copy.elems) {
-
-	}
-
-	UNIVERSAL_STORAGE PointMassArray<DIM, T>(PointMass<DIM, T>& p){
-		m = &(p.m);
-		pos = VecArray<DIM, T>(p.pos);
-	//	setCapacity(1);
-	}
 	
 	
 	UNIVERSAL_STORAGE /*inline*/ void setCapacity(our_size_t i){
@@ -383,19 +335,12 @@ template<our_size_t DIM, typename T> struct PointMassArray{
 		o.setCapacity(elems - i);
 		return o;
 	}
-	
-	UNIVERSAL_STORAGE /*inline*/ PointMassArray<DIM, T>& operator=(const PointMassArray<DIM, T> &n){
-		pos = (n.pos);
-		m = (n.m);
-		elems = (n.elems);
-		return *this;
-	}
 
 };
 
 
 
-
+template<our_size_t DIM, typename T> struct NodeArray;
 template<our_size_t DIM, typename T> struct Node{
 	bool isLeaf;
 	our_size_t childCount;
@@ -405,7 +350,19 @@ template<our_size_t DIM, typename T> struct Node{
 	PointMass<DIM, T> barycenter;
 	T radius;
 	
-	UNIVERSAL_STORAGE Node<DIM, T>(){}
+	UNIVERSAL_STORAGE NodeArray<DIM, T> toArray(){
+		NodeArray<DIM, T> copyTo;
+		copyTo.isLeaf = &isLeaf;
+		copyTo.childCount = &childCount;
+		copyTo.childStart = &childStart;
+		copyTo.minX = minX.toArray();
+		copyTo.maxX = maxX.toArray();
+		copyTo.barycenter = barycenter.toArray();
+		copyTo.radius = &radius;
+		//	copyTo.setCapacity(1);
+		return copyTo;
+	}
+	
 };
 
 template<our_size_t DIM, typename T> struct NodeArray{
@@ -417,33 +374,6 @@ template<our_size_t DIM, typename T> struct NodeArray{
 	PointMassArray<DIM, T> barycenter;
 	T *radius;
 	our_size_t elems;
-	
-	UNIVERSAL_STORAGE NodeArray<DIM, T>(){
-	//	setCapacity(0);
-		isLeaf = nullptr;
-		childCount = nullptr;
-		childStart = nullptr;
-		radius = nullptr;
-	}
-
-	UNIVERSAL_STORAGE NodeArray<DIM, T>(const NodeArray<DIM, T>& copy) :
-			isLeaf(copy.isLeaf), childCount(copy.childCount), childStart(copy.childStart),
-			minX(copy.minX), maxX(copy.maxX), barycenter(copy.barycenter), radius(copy.radius), elems(copy.elems) {
-	}
-
-	UNIVERSAL_STORAGE NodeArray<DIM, T>(Node<DIM, T>& n){
-		isLeaf = &(n.isLeaf);
-		childCount = &(n.childCount);
-		childStart = &(n.childStart);
-		
-		minX = VecArray<DIM, T>(n.minX);
-		maxX = VecArray<DIM, T>(n.maxX);
-		barycenter = PointMassArray<DIM, T>(n.barycenter);
-		
-		radius = &(n.radius);
-	//	setCapacity(1);
-	}
-	
 	
 	UNIVERSAL_STORAGE /*inline*/ void setCapacity(our_size_t i){
 		elems = i;
@@ -489,47 +419,26 @@ template<our_size_t DIM, typename T> struct NodeArray{
 		return o;
 	}
 	
-	UNIVERSAL_STORAGE /*inline*/ NodeArray<DIM, T>& operator=(const NodeArray<DIM, T> &n){
-		isLeaf = (n.isLeaf);
-		childCount = (n.childCount);
-		childStart = (n.childStart);
-
-		minX = (n.minX);
-		maxX = (n.maxX);
-		barycenter = (n.barycenter);
-
-		radius = (n.radius);
-		elems = (n.elems);
-		return *this;
-	}
-
-	
 };
 
+template<our_size_t DIM, typename T> struct ParticleArray;
 template<our_size_t DIM, typename T> struct Particle{
 	PointMass<DIM, T> mass;
 	Vec<DIM, T> vel;
+	
+	UNIVERSAL_STORAGE ParticleArray<DIM, T> toArray(){
+		ParticleArray<DIM, T> copyTo;
+		copyTo.mass = mass.toArray();
+		copyTo.vel = vel.toArray();
+		//	copyTo.setCapacity(1);
+		return copyTo;
+	}
 };
 
 template<our_size_t DIM, typename T> struct ParticleArray{
 	PointMassArray<DIM, T> mass;
 	VecArray<DIM, T> vel;
 	our_size_t elems;
-	
-	UNIVERSAL_STORAGE ParticleArray<DIM, T>(){
-	//	setCapacity(0);
-	}
-	
-	UNIVERSAL_STORAGE ParticleArray<DIM, T>(const ParticleArray<DIM, T>& copy) :
-			mass(copy.mass), vel(copy.vel), elems(copy.elems) {
-	}
-
-	UNIVERSAL_STORAGE ParticleArray<DIM, T>(Particle<DIM, T>& p){
-		mass = PointMassArray<DIM, T>(p.mass);
-		vel = VecArray<DIM, T>(p.vel);
-	//	setCapacity(1);
-	}
-	
 	
 	UNIVERSAL_STORAGE /*inline*/ void setCapacity(our_size_t i){
 		elems = i;
@@ -557,13 +466,6 @@ template<our_size_t DIM, typename T> struct ParticleArray{
 		o.vel = vel + i;
 		o.setCapacity(elems - i);
 		return o;
-	}
-	
-	UNIVERSAL_STORAGE /*inline*/ ParticleArray<DIM, T>& operator=(const ParticleArray<DIM, T> &n){
-		mass = (n.mass);
-		vel = (n.vel);
-		elems = n.elems;
-		return *this;
 	}
 
 };
